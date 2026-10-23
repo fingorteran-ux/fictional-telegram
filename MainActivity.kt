@@ -13,7 +13,6 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Si tocas la notificación, se apaga de inmediato
         val intent = Intent(this, RadarService::class.java).apply {
             action = RadarService.ACTION_STOP_SIREN
         }
@@ -23,6 +22,7 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        // Forzar solicitud de permisos de notificaciones al abrir la app
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
@@ -32,23 +32,23 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startRadarService" -> {
-                    val targets = call.argument<List<String>>("targets") ?: emptyList()
-                    val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-                    prefs.edit().putStringSet("direct_radar_targets", targets.toSet()).apply()
-
                     val intent = Intent(this, RadarService::class.java)
                     ContextCompat.startForegroundService(this, intent)
+                    result.success(true)
+                }
+                "syncTargets" -> {
+                    val json = call.argument<String>("json") ?: "[]"
+                    RadarService.targetsInMemory = json
+                    val intent = Intent(this, RadarService::class.java).apply {
+                        action = RadarService.ACTION_SYNC_TARGETS
+                        putExtra("targets_json", json)
+                    }
+                    startService(intent)
                     result.success(true)
                 }
                 "stopRadarService" -> {
                     val intent = Intent(this, RadarService::class.java)
                     stopService(intent)
-                    result.success(true)
-                }
-                "updateTargets" -> {
-                    val targets = call.argument<List<String>>("targets") ?: emptyList()
-                    val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-                    prefs.edit().putStringSet("direct_radar_targets", targets.toSet()).apply()
                     result.success(true)
                 }
                 "stopSiren" -> {

@@ -9,10 +9,12 @@ import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.RingtoneManager
 import android.os.Build
+import android.os.Bundle
 import android.os.IBinder
 import android.os.PowerManager
 import android.speech.tts.TextToSpeech
 import androidx.core.app.NotificationCompat
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -25,15 +27,15 @@ import java.util.concurrent.TimeUnit
 
 class RadarService : Service(), TextToSpeech.OnInitListener {
     private var scheduler: ScheduledExecutorService? = null
-    private val previousOnline = HashSet<String>()
+    private val previousOnline = HashMap<String, HashSet<String>>()
     private var isFirstRun = true
-    private var isSirenRunning = false
-    private var sirenTrack: AudioTrack? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
 
     companion object {
         const val ACTION_STOP_SIREN = "com.tactical.tibia.ACTION_STOP_SIREN"
+        const val ACTION_SYNC_TARGETS = "com.tactical.tibia.ACTION_SYNC_TARGETS"
+        var targetsInMemory: String = "[]"
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -46,16 +48,28 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts?.language = Locale("es", "ES")
+            val result = tts?.setLanguage(Locale.getDefault())
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                tts?.language = Locale("es")
+            }
+            tts?.setSpeechRate(0.95f)
             ttsReady = true
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP_SIREN) {
-            stopSirenAndVoice()
+            try { tts?.stop() } catch (e: Exception) {}
             val notifyMgr = getSystemService(NotificationManager::class.java)
             notifyMgr?.cancel(9999)
+            return START_STICKY
+        }
+
+        if (intent?.action == ACTION_SYNC_TARGETS) {
+            val json = intent.getStringExtra("targets_json")
+            if (json != null && json.isNotEmpty()) {
+                targetsInMemory = json
+            }
             return START_STICKY
         }
 
@@ -75,21 +89,28 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
             val manager = getSystemService(NotificationManager::class.java)
 
             val statusChannel = NotificationChannel(
-                "radar_status",
+                "radar_status_v3",
                 "Estado Spy Ferobra",
                 NotificationManager.IMPORTANCE_LOW
             )
             manager?.createNotificationChannel(statusChannel)
 
             val alertChannel = NotificationChannel(
-                "radar_alerts",
-                "Alertas Tácticas de Emergencia",
+                "radar_alerts_v3",
+                "Alertas Tácticas de Voz",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Sirenas y avisos de voz"
+                description = "Alertas de voz para entradas, salidas y muertes"
                 enableVibration(true)
-                vibrationPattern = longArrayOf(0, 250, 150, 250)
+                vibrationPattern = longArrayOf(0, 180, 100, 180)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setSound(
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
             }
             manager?.createNotificationChannel(alertChannel)
         }
@@ -102,8 +123,8 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        return NotificationCompat.Builder(this, "radar_status")
-            .setContentTitle("🛰️ SPY FEROBRA // EN VIVO")
+        return NotificationCompat.Builder(this, "radar_status_v3")
+            .setContentTitle("🛰️ SPY FEROBRA // ACTIVO")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
@@ -117,94 +138,163 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
         scheduler = Executors.newSingleThreadScheduledExecutor()
         scheduler?.scheduleWithFixedDelay({
             try {
-                scanWorld()
+                scanWorlds()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
-        }, 3, 35, TimeUnit.SECONDS)
+        }, 2, 30, TimeUnit.SECONDS)
     }
 
+    // VOZ A VOLUMEN DE ALARMA
     private fun speakText(text: String) {
         try {
             if (ttsReady && tts != null) {
-                tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "TTS_ALERT")
+                val params = Bundle().apply {
+                    putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_ALARM)
+                    putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f)
+                }
+                tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params, "SPY_VOICE")
             }
         } catch (e: Exception) {}
     }
 
-    private fun scanWorld() {
-        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        val targetList = mutableSetOf<String>()
+    // SIRENA DE 1 SEGUNDO
+    private fun playOneSecondSiren() {
+        Thread {
+            try {
+                Thread.sleep(2000)
+                val sampleRate = 22050
+                val durationSeconds = 1.0
+                val totalSamples = (sampleRate * durationSeconds).toInt()
+                val buffer = ShortArray(totalSamples)
+                var phase = 0.0
 
-        val directTargets = prefs.getStringSet("direct_radar_targets", null)
-        if (directTargets != null) {
-            for (t in directTargets) targetList.add(t.trim().lowercase())
-        }
-
-        if (targetList.isEmpty()) return
-
-        val url = URL("https://api.tibiadata.com/v4/world/Ferobra")
-        val conn = url.openConnection() as HttpURLConnection
-        conn.connectTimeout = 12000
-        conn.readTimeout = 12000
-        conn.requestMethod = "GET"
-
-        if (conn.responseCode == 200) {
-            val reader = BufferedReader(InputStreamReader(conn.inputStream))
-            val sb = StringBuilder()
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                sb.append(line)
-            }
-            reader.close()
-
-            val json = JSONObject(sb.toString())
-            val worldObj = json.optJSONObject("world") ?: return
-            val playersArr = worldObj.optJSONArray("online_players") ?: return
-
-            val currentOnlineMap = HashMap<String, String>()
-            for (i in 0 until playersArr.length()) {
-                val p = playersArr.getJSONObject(i)
-                val name = p.optString("name").trim().lowercase()
-                val lvl = p.optInt("level")
-                val voc = p.optString("vocation")
-                currentOnlineMap[name] = "$lvl - $voc"
-            }
-
-            if (!isFirstRun) {
-                // LOGIN: Voz diciendo que conectó + pitidos
-                for (target in targetList) {
-                    if (currentOnlineMap.containsKey(target) && !previousOnline.contains(target)) {
-                        val info = currentOnlineMap[target] ?: ""
-                        speakText("Atención: $target, se conectó tu enemigo.")
-                        showLoginNotification(target, info)
-                    }
+                for (i in 0 until totalSamples) {
+                    val t = i.toDouble() / sampleRate
+                    val freq = 700.0 + 350.0 * Math.sin(2.0 * Math.PI * 1.5 * t)
+                    phase += 2.0 * Math.PI * freq / sampleRate
+                    buffer[i] = (Math.sin(phase) * 32767 * 0.95).toInt().toShort()
                 }
 
-                // LOGOUT: Voz diciendo que desconectó + SIRENA DE 5 SEGUNDOS
-                for (target in targetList) {
-                    if (!currentOnlineMap.containsKey(target) && previousOnline.contains(target)) {
-                        speakText("Atención: $target, se desconectó tu enemigo.")
-                        triggerFiveSecondSirenAlert(target)
-                    }
-                }
-            } else {
-                isFirstRun = false
-            }
-
-            previousOnline.clear()
-            previousOnline.addAll(currentOnlineMap.keys)
-
-            val onlineCount = targetList.count { currentOnlineMap.containsKey(it) }
-            val notifyMgr = getSystemService(NotificationManager::class.java)
-            notifyMgr?.notify(
-                1001,
-                createPersistentNotification("Vigilando Ferobra: $onlineCount/${targetList.size} enemigos activos")
-            )
-        }
+                val minBuf = AudioTrack.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                val track = AudioTrack(
+                    AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build(),
+                    AudioFormat.Builder().setSampleRate(sampleRate).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build(),
+                    maxOf(buffer.size * 2, minBuf),
+                    AudioTrack.MODE_STREAM,
+                    AudioManager.AUDIO_SESSION_ID_GENERATE
+                )
+                track.play()
+                track.write(buffer, 0, buffer.size)
+                track.stop()
+                track.release()
+            } catch (e: Exception) {}
+        }.start()
     }
 
-    private fun showLoginNotification(target: String, info: String) {
+    private fun scanWorlds() {
+        var targetsArray = JSONArray(targetsInMemory)
+        if (targetsArray.length() == 0) {
+            val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val stored = prefs.getString("flutter.spy_targets_json", null) ?: prefs.getString("spy_targets_json", null) ?: "[]"
+            targetsArray = JSONArray(stored)
+        }
+
+        if (targetsArray.length() == 0) return
+
+        val worldsToScan = HashSet<String>()
+        val targetObjects = ArrayList<JSONObject>()
+
+        for (i in 0 until targetsArray.length()) {
+            val obj = targetsArray.getJSONObject(i)
+            targetObjects.add(obj)
+            val w = obj.optString("world", "Ferobra").trim()
+            if (w.isNotEmpty()) worldsToScan.add(w)
+        }
+
+        for (worldName in worldsToScan) {
+            val currentOnlineMap = HashMap<String, String>()
+            try {
+                val url = URL("https://api.tibiadata.com/v4/world/$worldName")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.connectTimeout = 8000
+                conn.readTimeout = 8000
+                conn.requestMethod = "GET"
+                // User-Agent oficial para que Cloudflare nunca bloquee las peticiones en segundo plano
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
+
+                if (conn.responseCode == 200) {
+                    val reader = BufferedReader(InputStreamReader(conn.inputStream))
+                    val sb = StringBuilder()
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) { sb.append(line) }
+                    reader.close()
+
+                    val json = JSONObject(sb.toString())
+                    val playersArr = json.optJSONObject("world")?.optJSONArray("online_players")
+
+                    if (playersArr != null) {
+                        for (i in 0 until playersArr.length()) {
+                            val p = playersArr.getJSONObject(i)
+                            val name = p.optString("name").trim().lowercase()
+                            val lvl = p.optInt("level")
+                            val voc = p.optString("vocation")
+                            currentOnlineMap[name] = "$lvl - $voc"
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                continue
+            }
+
+            if (currentOnlineMap.isEmpty()) continue
+
+            val prevOnline = previousOnline[worldName] ?: HashSet()
+
+            if (!isFirstRun && prevOnline.isNotEmpty()) {
+                val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+
+                for (targetObj in targetObjects) {
+                    val targetName = targetObj.optString("name").trim().lowercase()
+                    val targetWorld = targetObj.optString("world", "Ferobra").trim()
+                    val targetType = targetObj.optString("type", "enemigo").trim().lowercase()
+
+                    if (!targetWorld.equals(worldName, ignoreCase = true)) continue
+
+                    val muteLogin = prefs.getBoolean("flutter.mute_login_$targetName", false) || prefs.getBoolean("mute_login_$targetName", false)
+                    val muteLogout = prefs.getBoolean("flutter.mute_logout_$targetName", false) || prefs.getBoolean("mute_logout_$targetName", false)
+                    val charDisplay = targetObj.optString("name").trim()
+
+                    // LOGIN: "Tu amigo Fiodor en Ferobra conectó" / "Tu enemigo..."
+                    if (currentOnlineMap.containsKey(targetName) && !prevOnline.contains(targetName)) {
+                        if (!muteLogin) {
+                            val msg = if (targetType == "amigo") "Tu amigo $charDisplay en $targetWorld conectó." else "Tu enemigo $charDisplay en $targetWorld conectó."
+                            speakText(msg)
+                            showEventNotification(charDisplay, targetWorld, "conectó", targetType == "amigo")
+                        }
+                    }
+
+                    // LOGOUT: "Tu amigo Fiodor en Ferobra desconectó" / "Tu enemigo..." (+ sirena 1s)
+                    if (!currentOnlineMap.containsKey(targetName) && prevOnline.contains(targetName)) {
+                        if (!muteLogout) {
+                            val msg = if (targetType == "amigo") "Tu amigo $charDisplay en $targetWorld desconectó." else "Tu enemigo $charDisplay en $targetWorld desconectó."
+                            speakText(msg)
+                            if (targetType != "amigo") {
+                                playOneSecondSiren()
+                            }
+                            showEventNotification(charDisplay, targetWorld, "desconectó", targetType == "amigo")
+                        }
+                    }
+                }
+            }
+
+            previousOnline[worldName] = HashSet(currentOnlineMap.keys)
+        }
+
+        if (isFirstRun) isFirstRun = false
+    }
+
+    private fun showEventNotification(name: String, world: String, action: String, isFriend: Boolean) {
         wakeUpScreen()
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
         val pendingIntent = PendingIntent.getActivity(
@@ -212,135 +302,23 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-        val builder = NotificationCompat.Builder(this, "radar_alerts")
-            .setContentTitle("⚠️ [SPY FEROBRA: CONECTADO]")
-            .setContentText("🎯 ${target.uppercase()} ($info) acaba de entrar!")
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .setSound(soundUri)
-            .setVibrate(longArrayOf(0, 150, 100, 150))
+        val title = if (isFriend) "🛡️ [AMIGO EN $world]" else "⚔️ [ENEMIGO EN $world]"
+        val text = if (isFriend) "Tu amigo $name $action en $world." else "Tu enemigo $name $action en $world."
 
-        val notifyMgr = getSystemService(NotificationManager::class.java)
-        notifyMgr?.notify((System.currentTimeMillis() % 100000).toInt(), builder.build())
-    }
-
-    private fun triggerFiveSecondSirenAlert(target: String) {
-        wakeUpScreen()
-        startContinuousSirenAudio(5) // SIRENA DE 5 SEGUNDOS
-
-        val stopIntent = Intent(this, RadarService::class.java).apply {
-            action = ACTION_STOP_SIREN
-        }
-        val stopPendingIntent = PendingIntent.getService(
-            this, 202, stopIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
-        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
-        launchIntent?.action = ACTION_STOP_SIREN
-        val openAppPendingIntent = PendingIntent.getActivity(
-            this, 303, launchIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
-        val notification = NotificationCompat.Builder(this, "radar_alerts")
-            .setContentTitle("🚨 ¡ENEMIGO DESCONECTADO! 🚨")
-            .setContentText("💀 ${target.uppercase()} acaba de SALIR de Ferobra.")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("💀 ${target.uppercase()} salió de Ferobra.\nSirena de 5s. Toca para apagar."))
+        val builder = NotificationCompat.Builder(this, "radar_alerts_v3")
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setContentIntent(openAppPendingIntent)
-            .setDeleteIntent(stopPendingIntent)
+            .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-            .addAction(android.R.drawable.ic_lock_power_off, "SILENCIAR", stopPendingIntent)
-            .build()
+            .setVibrate(longArrayOf(0, 150, 100, 150))
 
         val notifyMgr = getSystemService(NotificationManager::class.java)
-        notifyMgr?.notify(9999, notification)
-    }
-
-    private fun startContinuousSirenAudio(seconds: Int) {
-        stopSiren()
-        isSirenRunning = true
-
-        Thread {
-            try {
-                // Pausa corta para que la voz diga el nombre antes de sonar la sirena
-                Thread.sleep(2200)
-                if (!isSirenRunning) return@Thread
-
-                val sampleRate = 22050
-                val cycleDuration = 1.0
-                val cycleSamples = (sampleRate * cycleDuration).toInt()
-                val buffer = ShortArray(cycleSamples)
-                var phase = 0.0
-
-                for (i in 0 until cycleSamples) {
-                    val t = i.toDouble() / sampleRate
-                    val freq = 750.0 + 320.0 * Math.sin(2.0 * Math.PI * (1.0 / cycleDuration) * t)
-                    phase += 2.0 * Math.PI * freq / sampleRate
-                    buffer[i] = (Math.sin(phase) * 32767 * 0.95).toInt().toShort()
-                }
-
-                val minBuf = AudioTrack.getMinBufferSize(
-                    sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT
-                )
-
-                val track = AudioTrack(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build(),
-                    AudioFormat.Builder()
-                        .setSampleRate(sampleRate)
-                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .build(),
-                    maxOf(buffer.size * 2, minBuf),
-                    AudioTrack.MODE_STREAM,
-                    AudioManager.AUDIO_SESSION_ID_GENERATE
-                )
-
-                sirenTrack = track
-                track.play()
-
-                val endTime = System.currentTimeMillis() + (seconds * 1000)
-
-                while (isSirenRunning && System.currentTimeMillis() < endTime) {
-                    track.write(buffer, 0, buffer.size)
-                }
-
-                track.stop()
-                track.release()
-                sirenTrack = null
-                isSirenRunning = false
-
-                val notifyMgr = getSystemService(NotificationManager::class.java)
-                notifyMgr?.cancel(9999)
-            } catch (e: Exception) {}
-        }.start()
-    }
-
-    private fun stopSiren() {
-        isSirenRunning = false
-        try {
-            sirenTrack?.stop()
-            sirenTrack?.release()
-            sirenTrack = null
-        } catch (e: Exception) {}
-    }
-
-    private fun stopSirenAndVoice() {
-        stopSiren()
-        try {
-            tts?.stop()
-        } catch (e: Exception) {}
+        notifyMgr?.notify((System.currentTimeMillis() % 100000).toInt(), builder.build())
     }
 
     private fun wakeUpScreen() {
@@ -348,15 +326,15 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
             val wl = pm.newWakeLock(
                 PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
-                "spy_ferobra:siren_wake"
+                "spy_ferobra:screen_wake"
             )
-            wl.acquire(8000)
+            wl.acquire(6000)
         } catch (e: Exception) {}
     }
 
     override fun onDestroy() {
-        stopSirenAndVoice()
         try {
+            tts?.stop()
             tts?.shutdown()
         } catch (e: Exception) {}
         scheduler?.shutdownNow()

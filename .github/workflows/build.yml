@@ -26,7 +26,7 @@ jobs:
           # Inyectar permisos de Android
           sed -i 's/<application/    <uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.VIBRATE"\/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"\/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"\/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"\/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"\/>\n    <application/' app/android/app/src/main/AndroidManifest.xml
           
-          # Cambiar nombre a "Spy Ferobra" e inyectar servicio
+          # Nombre oficial "Spy Ferobra" e inyección del servicio
           sed -i 's/android:label=".*"/android:label="Spy Ferobra"/' app/android/app/src/main/AndroidManifest.xml
           sed -i 's/<\/application>/    <service android:name=".RadarService" android:foregroundServiceType="dataSync" android:exported="false" \/>\n    <\/application>/' app/android/app/src/main/AndroidManifest.xml
 

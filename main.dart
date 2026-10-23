@@ -39,7 +39,6 @@ class TacticalAudio {
     return byteData.buffer.asUint8List();
   }
 
-  // TRES PITIDOS SEGUIDOS ("PI - PI - PI")
   static Future<void> playThreeBeeps() async {
     if (!soundEnabled) return;
     try {
@@ -117,8 +116,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
 class TrackTarget {
   final String name;
-  final String type; // 'amigo' o 'enemigo'
-  final String world; // 'Ferobra' o 'Quintera'
+  final String type;
+  final String world;
 
   TrackTarget({required this.name, required this.type, required this.world});
 
@@ -132,7 +131,7 @@ class TrackTarget {
 }
 
 // -------------------------------------------------------------
-// PESTAÑA 1: WAR HUD (MUERTES CON MONSTRUOS Y PKS ANIMADOS)
+// PESTAÑA 1: WAR HUD (MAGO CON FERUMBRAS HAT & SPRITES OFICIALES)
 // -------------------------------------------------------------
 class RadarScreen extends StatefulWidget {
   const RadarScreen({super.key});
@@ -199,10 +198,10 @@ class _RadarScreenState extends State<RadarScreen> {
     }
 
     setState(() {});
-    addLog("SPY FEROBRA & QUINTERA EN VIVO");
+    addLog("SPY FEROBRA & QUINTERA ACTIVO // VIGILANCIA 24/7");
     syncNativeService();
     scanAllWorlds();
-    _timer = Timer.periodic(const Duration(seconds: 35), (_) => scanAllWorlds());
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) => scanAllWorlds());
   }
 
   Future<void> syncNativeService() async {
@@ -213,6 +212,7 @@ class _RadarScreenState extends State<RadarScreen> {
     try {
       if (isBackgroundActive) {
         await platform.invokeMethod('startRadarService');
+        await platform.invokeMethod('syncTargets', {'json': jsonStr});
       } else {
         await platform.invokeMethod('stopRadarService');
       }
@@ -222,7 +222,11 @@ class _RadarScreenState extends State<RadarScreen> {
   Future<void> fetchCharacterDetails(String charName) async {
     final key = charName.toLowerCase();
     try {
-      final res = await http.get(Uri.parse('https://api.tibiadata.com/v4/character/${Uri.encodeComponent(charName)}')).timeout(const Duration(seconds: 10));
+      final res = await http.get(
+        Uri.parse('https://api.tibiadata.com/v4/character/${Uri.encodeComponent(charName)}'),
+        headers: {'User-Agent': 'Mozilla/5.0 (Android; Mobile)'},
+      ).timeout(const Duration(seconds: 10));
+
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         final ch = data['character']?['character'];
@@ -282,11 +286,17 @@ class _RadarScreenState extends State<RadarScreen> {
 
     for (var w in worldsToScan) {
       try {
-        final response = await http.get(Uri.parse('https://api.tibiadata.com/v4/world/$w')).timeout(const Duration(seconds: 12));
+        final response = await http.get(
+          Uri.parse('https://api.tibiadata.com/v4/world/$w'),
+          headers: {'User-Agent': 'Mozilla/5.0 (Android; Mobile)'},
+        ).timeout(const Duration(seconds: 10));
+
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
           final List players = data['world']?['online_players'] ?? [];
           final now = DateTime.now().millisecondsSinceEpoch;
+
+          addLog("🛰️ $w: ${players.length} jugadores conectados.");
 
           for (var p in players) {
             final name = p['name'].toString().toLowerCase();
@@ -307,14 +317,16 @@ class _RadarScreenState extends State<RadarScreen> {
     }
 
     final now = DateTime.now().millisecondsSinceEpoch;
-    for (var oldName in onlinePlayersData.keys) {
-      if (!newOnlineMap.containsKey(oldName)) {
-        if (loginTimestamps.containsKey(oldName)) {
-          sessionDurations[oldName] = now - loginTimestamps[oldName]!;
+    // Únicamente registra desconexiones de personas en la lista (CERO desconocidos)
+    for (var t in targets) {
+      final name = t.name.toLowerCase();
+      if (onlinePlayersData.containsKey(name) && !newOnlineMap.containsKey(name)) {
+        if (loginTimestamps.containsKey(name)) {
+          sessionDurations[name] = now - loginTimestamps[name]!;
         }
         final dt = DateTime.now();
-        logoutTimes[oldName] = "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
-        addLog("🛑 [OFFLINE]: ${oldName.toUpperCase()} salió");
+        logoutTimes[name] = "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+        addLog("🛑 [OFFLINE]: ${t.name.toUpperCase()} desconectó de ${t.world}");
       }
     }
 
@@ -328,7 +340,11 @@ class _RadarScreenState extends State<RadarScreen> {
     if (characterDeaths.containsKey(charName)) return;
     setState(() => loadingDeaths[charName] = true);
     try {
-      final response = await http.get(Uri.parse('https://api.tibiadata.com/v4/character/${Uri.encodeComponent(charName)}')).timeout(const Duration(seconds: 10));
+      final response = await http.get(
+        Uri.parse('https://api.tibiadata.com/v4/character/${Uri.encodeComponent(charName)}'),
+        headers: {'User-Agent': 'Mozilla/5.0 (Android; Mobile)'},
+      ).timeout(const Duration(seconds: 10));
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final List deaths = data['character']?['deaths'] ?? [];
@@ -471,103 +487,80 @@ class _RadarScreenState extends State<RadarScreen> {
     );
   }
 
-  Widget _getVocationAvatar(String? vocation, bool isOnline, String type) {
+  // SPRITE OFICIAL ANIMADO DE VOCACIÓN (MAGO FULL CON FERUMBRAS HAT)
+  Widget _getOfficialVocationSprite(String? vocation, bool isOnline) {
     final voc = (vocation ?? '').toLowerCase();
-    String iconText = "⚔️";
-    Color vocColor = Colors.grey;
+    String spriteUrl;
 
-    if (voc.contains('knight')) {
-      iconText = "🛡️ EK";
-      vocColor = Colors.amber;
-    } else if (voc.contains('druid')) {
-      iconText = "🌿 ED";
-      vocColor = Colors.greenAccent;
-    } else if (voc.contains('sorcerer')) {
-      iconText = "⚡ MS";
-      vocColor = Colors.purpleAccent;
+    if (voc.contains('sorcerer')) {
+      // MAGO FULL CON EL SOMBRERO DE FERUMBRAS (OFFICIAL GIF)
+      spriteUrl = "https://tibia.fandom.com/wiki/Special:FilePath/Outfit_Mage_Male_Addon_3.gif";
+    } else if (voc.contains('knight')) {
+      // GUERRERO CON ESPADA / FULL KNIGHT (OFFICIAL GIF)
+      spriteUrl = "https://tibia.fandom.com/wiki/Special:FilePath/Outfit_Warrior_Male_Addon_3.gif";
     } else if (voc.contains('paladin')) {
-      iconText = "🏹 RP";
-      vocColor = Colors.cyanAccent;
+      // CAZADOR CON MOCHILA / HUNTER FULL (OFFICIAL GIF)
+      spriteUrl = "https://tibia.fandom.com/wiki/Special:FilePath/Outfit_Hunter_Male_Addon_3.gif";
+    } else if (voc.contains('druid')) {
+      // DRUIDA CON CUERNOS / DRUID FULL (OFFICIAL GIF)
+      spriteUrl = "https://tibia.fandom.com/wiki/Special:FilePath/Outfit_Druid_Male_Addon_3.gif";
+    } else {
+      spriteUrl = "https://tibia.fandom.com/wiki/Special:FilePath/Outfit_Citizen_Male_Addon_3.gif";
     }
 
-    final borderColor = isOnline ? (type == 'amigo' ? const Color(0xFF00FFB2) : const Color(0xFF00E5FF)) : Colors.white12;
-
     return Container(
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       decoration: BoxDecoration(
-        color: const Color(0xFF070B14),
+        color: const Color(0xFF0A0F1A),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: borderColor, width: isOnline ? 1.5 : 1.0),
+        border: Border.all(color: isOnline ? const Color(0xFF00FFB2) : Colors.white12, width: isOnline ? 1.5 : 1.0),
       ),
       child: Center(
-        child: Text(
-          iconText,
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace', color: isOnline ? vocColor : Colors.white30),
+        child: Opacity(
+          opacity: isOnline ? 1.0 : 0.35,
+          child: Image.network(
+            spriteUrl,
+            width: 42,
+            height: 42,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white24),
+          ),
         ),
       ),
     );
   }
 
-  // WIDGET PARA DIBUJAR AL MONSTRUO O AL PLAYER KILLER (ANIMADO)
-  Widget _buildKillerSprite(dynamic death) {
+  // MONSTRUO OFICIAL ANIMADO EN MOVIMIENTO (SIN LOGOS NI EMOJIS)
+  Widget _buildOfficialMonsterSprite(dynamic death) {
     final killers = death['killers'] as List? ?? [];
     if (killers.isEmpty) {
-      return const Text("💀", style: TextStyle(fontSize: 20));
+      return Image.network("https://tibia.fandom.com/wiki/Special:FilePath/Demon.gif", width: 34, height: 34);
     }
 
     final firstKiller = killers.first;
-    final killerName = firstKiller['name']?.toString() ?? 'Monstruo';
+    final killerName = firstKiller['name']?.toString() ?? 'Demon';
     final isPlayer = firstKiller['player'] == true;
 
     if (isPlayer) {
-      // SI FUE ASESINADO POR UN JUGADOR (PvP / PK en Guerra)
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-        decoration: BoxDecoration(
-          color: const Color(0xFF2E0909),
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: Colors.redAccent, width: 1.2),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text("⚔️ 💀", style: TextStyle(fontSize: 14)),
-            const SizedBox(width: 4),
-            Text(
-              "PK: ${killerName.toUpperCase()}",
-              style: const TextStyle(color: Color(0xFFFF5252), fontWeight: FontWeight.bold, fontFamily: 'monospace', fontSize: 10),
-            ),
-          ],
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(color: const Color(0xFF26080A), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.redAccent)),
+        child: Text("PK: ${killerName.toUpperCase()}", style: const TextStyle(color: Colors.redAccent, fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 10)),
       );
     } else {
-      // SI FUE ASESINADO POR UN MONSTRUO (Muestra la miniatura animada del monstruo)
-      final cleanName = killerName.replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '').trim();
-      final formattedUrl = "https://tibia.fandom.com/wiki/Special:FilePath/${Uri.encodeComponent(cleanName)}.gif";
+      final cleanName = killerName.replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '').trim().replaceAll(' ', '_');
+      final monsterUrl = "https://tibia.fandom.com/wiki/Special:FilePath/$cleanName.gif";
 
       return Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: const Color(0xFF101625),
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.network(
-              formattedUrl,
-              width: 32,
-              height: 32,
-              errorBuilder: (_, __, ___) => const Text("👾", style: TextStyle(fontSize: 16)),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              cleanName.toUpperCase(),
-              style: const TextStyle(color: Color(0xFF80DEEA), fontFamily: 'monospace', fontSize: 10, fontWeight: FontWeight.bold),
-            ),
-          ],
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(color: const Color(0xFF070B14), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white12)),
+        child: Image.network(
+          monsterUrl,
+          width: 36,
+          height: 36,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => Image.network("https://tibia.fandom.com/wiki/Special:FilePath/Demon.gif", width: 34, height: 34),
         ),
       );
     }
@@ -597,9 +590,7 @@ class _RadarScreenState extends State<RadarScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isScanning ? const Color(0xFF00FFB2) : const Color(0xFF00E5FF),
-                boxShadow: [
-                  BoxShadow(color: const Color(0xFF00E5FF).withOpacity(0.8), blurRadius: 8, spreadRadius: 2)
-                ],
+                boxShadow: [BoxShadow(color: const Color(0xFF00E5FF).withOpacity(0.8), blurRadius: 8, spreadRadius: 2)],
               ),
             ),
             const SizedBox(width: 8),
@@ -624,6 +615,38 @@ class _RadarScreenState extends State<RadarScreen> {
         padding: const EdgeInsets.all(12.0),
         child: Column(
           children: [
+            // PANEL 24/7 FIJO ARRIBA
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A101C),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: isBackgroundActive ? const Color(0xFF00FFB2) : Colors.redAccent, width: 1.2),
+              ),
+              child: Row(
+                children: [
+                  Icon(isBackgroundActive ? Icons.security : Icons.security_update_warning, color: isBackgroundActive ? const Color(0xFF00FFB2) : Colors.redAccent, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      isBackgroundActive ? "VIGILANCIA 24/7 EN SEGUNDO PLANO: ACTIVA" : "SEGUNDO PLANO: DESACTIVADO",
+                      style: TextStyle(fontFamily: 'monospace', fontSize: 10, fontWeight: FontWeight.bold, color: isBackgroundActive ? const Color(0xFF00FFB2) : Colors.redAccent),
+                    ),
+                  ),
+                  Switch(
+                    value: isBackgroundActive,
+                    activeColor: const Color(0xFF00FFB2),
+                    onChanged: (val) {
+                      setState(() => isBackgroundActive = val);
+                      syncNativeService();
+                    },
+                  )
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // PANEL AGREGAR CON SELECTOR FEROBRA / QUINTERA
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(color: const Color(0xFF0E1424), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white12)),
@@ -658,22 +681,16 @@ class _RadarScreenState extends State<RadarScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00FFB2),
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                        ).buildWidget(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FFB2), foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 8)),
                           onPressed: () => addTarget('amigo'),
                           child: const Text("🛡️ + AMIGO", style: TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF5252),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                        ).buildWidget(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF5252), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 8)),
                           onPressed: () => addTarget('enemigo'),
                           child: const Text("⚔️ + ENEMIGO", style: TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
                         ),
@@ -685,6 +702,7 @@ class _RadarScreenState extends State<RadarScreen> {
             ),
             const SizedBox(height: 8),
 
+            // FILTROS
             Row(
               children: [
                 _filterBtn('TODOS'),
@@ -724,6 +742,7 @@ class _RadarScreenState extends State<RadarScreen> {
                 ),
               ),
 
+            // LISTA ORDENADA (ONLINE PRIMERO)
             Expanded(
               flex: 4,
               child: ListView.builder(
@@ -772,126 +791,76 @@ class _RadarScreenState extends State<RadarScreen> {
                         border: Border.all(color: cardBorderColor, width: isOnline ? 1.6 : 1.0),
                         boxShadow: isOnline ? [BoxShadow(color: cardBorderColor.withOpacity(0.18), blurRadius: 6, spreadRadius: 1)] : [],
                       ),
-                      child: Theme(
-                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                        child: ExpansionTile(
-                          onExpansionChanged: (expanded) {
-                            if (expanded) fetchDeaths(target.name);
-                          },
-                          leading: isSelectionMode
-                              ? Checkbox(
-                                  activeColor: const Color(0xFF00E5FF),
-                                  checkColor: Colors.black,
-                                  value: isChecked,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      if (val == true) {
-                                        selectedTargets.add(key);
-                                      } else {
-                                        selectedTargets.remove(key);
-                                      }
-                                    });
-                                  },
-                                )
-                              : _getVocationAvatar(vocation, isOnline, target.type),
-                          title: Row(
-                            children: [
-                              Text(
-                                target.name.toUpperCase(),
-                                style: TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13, color: isOnline ? Colors.white : Colors.white60),
-                              ),
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                decoration: BoxDecoration(
-                                  color: target.world == 'Ferobra' ? const Color(0xFF00E5FF).withOpacity(0.15) : Colors.amber.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(3),
-                                ),
-                                child: Text(
-                                  target.world.toUpperCase(),
-                                  style: TextStyle(fontSize: 8, fontFamily: 'monospace', fontWeight: FontWeight.bold, color: target.world == 'Ferobra' ? const Color(0xFF00E5FF) : Colors.amber),
-                                ),
-                              ),
-                              const Spacer(),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: isOnline ? const Color(0xFF00FFB2).withOpacity(0.2) : Colors.white10,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  isOnline ? "ONLINE" : "OFFLINE",
-                                  style: TextStyle(color: isOnline ? const Color(0xFF00FFB2) : Colors.white38, fontSize: 9, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
-                                ),
+                      child: ListTile(
+                        leading: isSelectionMode
+                            ? Checkbox(
+                                activeColor: const Color(0xFF00E5FF),
+                                checkColor: Colors.black,
+                                value: isChecked,
+                                onChanged: (val) {
+                                  setState(() {
+                                    if (val == true) {
+                                      selectedTargets.add(key);
+                                    } else {
+                                      selectedTargets.remove(key);
+                                    }
+                                  });
+                                },
                               )
-                            ],
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 2),
-                              Text(
-                                "Lvl $level | $vocation",
-                                style: TextStyle(color: isOnline ? Colors.white70 : Colors.white38, fontSize: 11, fontFamily: 'monospace'),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                timerText,
-                                style: TextStyle(color: isOnline ? Colors.amberAccent : Colors.white30, fontSize: 9, fontFamily: 'monospace'),
-                              ),
-                            ],
-                          ),
-                          trailing: isSelectionMode
-                              ? null
-                              : IconButton(
-                                  icon: const Icon(Icons.close, color: Colors.redAccent, size: 16),
-                                  onPressed: () => removeTarget(target.name),
-                                ),
+                            : _getOfficialVocationSprite(vocation, isOnline),
+                        title: Row(
                           children: [
+                            Text(
+                              target.name.toUpperCase(),
+                              style: TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13, color: isOnline ? Colors.white : Colors.white60),
+                            ),
+                            const SizedBox(width: 6),
                             Container(
-                              padding: const EdgeInsets.all(10),
-                              color: const Color(0xFF06080D),
-                              width: double.infinity,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text("💀 HISTORIAL DE MUERTES CON MINIATURAS:", style: TextStyle(color: Color(0xFFFF5252), fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-                                  const SizedBox(height: 8),
-                                  if (loadingDeaths[target.name] ?? false)
-                                    const Center(child: Padding(padding: EdgeInsets.all(8.0), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00E5FF)))))
-                                  else if (deaths.isEmpty)
-                                    const Text("Sin muertes recientes registradas en Tibia.", style: TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace'))
-                                  else
-                                    ...deaths.take(5).map((d) {
-                                      final time = d['time']?.toString().split('T').first ?? '';
-                                      final lvl = d['level'] ?? 0;
-
-                                      return Container(
-                                        margin: const EdgeInsets.only(bottom: 6),
-                                        padding: const EdgeInsets.all(6),
-                                        decoration: BoxDecoration(color: const Color(0xFF0B101A), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white10)),
-                                        child: Row(
-                                          children: [
-                                            _buildKillerSprite(d), // MINIATURA DEL MONSTRUO O PK
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text("Lvl $lvl en $time", style: const TextStyle(color: Colors.white70, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-                                                  Text(d['reason'] ?? '', style: const TextStyle(color: Colors.white38, fontSize: 9, fontFamily: 'monospace'), maxLines: 2),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }),
-                                ],
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: target.world == 'Ferobra' ? const Color(0xFF00E5FF).withOpacity(0.15) : Colors.amber.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                              child: Text(
+                                target.world.toUpperCase(),
+                                style: TextStyle(fontSize: 8, fontFamily: 'monospace', fontWeight: FontWeight.bold, color: target.world == 'Ferobra' ? const Color(0xFF00E5FF) : Colors.amber),
+                              ),
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isOnline ? const Color(0xFF00FFB2).withOpacity(0.2) : Colors.white10,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                isOnline ? "ONLINE" : "OFFLINE",
+                                style: TextStyle(color: isOnline ? const Color(0xFF00FFB2) : Colors.white38, fontSize: 9, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
                               ),
                             )
                           ],
                         ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 2),
+                            Text(
+                              "Lvl $level | $vocation",
+                              style: TextStyle(color: isOnline ? Colors.white70 : Colors.white38, fontSize: 11, fontFamily: 'monospace'),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              timerText,
+                              style: TextStyle(color: isOnline ? Colors.amberAccent : Colors.white30, fontSize: 9, fontFamily: 'monospace'),
+                            ),
+                          ],
+                        ),
+                        trailing: isSelectionMode
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.close, color: Colors.redAccent, size: 16),
+                                onPressed: () => removeTarget(target.name),
+                              ),
                       ),
                     ),
                   );
@@ -939,14 +908,8 @@ class _RadarScreenState extends State<RadarScreen> {
   }
 }
 
-extension ElevatedButtonExtension on ButtonStyle {
-  Widget buildWidget({required VoidCallback onPressed, required Widget child}) {
-    return ElevatedButton(style: this, onPressed: onPressed, child: child);
-  }
-}
-
 // -------------------------------------------------------------
-// PESTAÑA 2: MUNDO (MINIMAPA DE TIBIA & RASHID CAMINANDO)
+// PESTAÑA 2: MUNDO (TARJETA IDÉNTICA CON RASHID Y MAPA REAL)
 // -------------------------------------------------------------
 class WorldScreen extends StatefulWidget {
   const WorldScreen({super.key});
@@ -955,23 +918,20 @@ class WorldScreen extends StatefulWidget {
   State<WorldScreen> createState() => _WorldScreenState();
 }
 
-class _WorldScreenState extends State<WorldScreen> with SingleTickerProviderStateMixin {
+class _WorldScreenState extends State<WorldScreen> {
   Timer? _clockTimer;
   Duration timeToSS = Duration.zero;
-  late AnimationController _walkController;
 
   @override
   void initState() {
     super.initState();
     calculateTimeToSS();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) => calculateTimeToSS());
-    _walkController = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat(reverse: true);
   }
 
   @override
   void dispose() {
     _clockTimer?.cancel();
-    _walkController.dispose();
     super.dispose();
   }
 
@@ -989,14 +949,14 @@ class _WorldScreenState extends State<WorldScreen> with SingleTickerProviderStat
   Map<String, String> getRashidData() {
     final now = DateTime.now();
     switch (now.weekday) {
-      case DateTime.monday: return {'city': 'SVARGROND', 'spot': 'Taberna de Dankwart (al sur del barco)', 'next': 'LIBERTY BAY'};
-      case DateTime.tuesday: return {'city': 'LIBERTY BAY', 'spot': 'Taberna de Lyonel (1er piso)', 'next': 'PORT HOPE'};
-      case DateTime.wednesday: return {'city': 'PORT HOPE', 'spot': 'Barco de Clyde (segundo piso)', 'next': 'ANKRAHMUN'};
-      case DateTime.thursday: return {'city': 'ANKRAHMUN', 'spot': 'Taberna de Arito (sobre el depósito)', 'next': 'DARASHIA'};
-      case DateTime.friday: return {'city': 'DARASHIA', 'spot': 'Taberna de Miraia (al sur del banco)', 'next': 'EDRON'};
-      case DateTime.saturday: return {'city': 'EDRON', 'spot': 'Taberna de Mirabell (arriba del depósito)', 'next': 'CARLIN'};
-      case DateTime.sunday: return {'city': 'CARLIN', 'spot': 'Depósito central (segundo piso)', 'next': 'SVARGROND'};
-      default: return {'city': 'DARASHIA', 'spot': 'Taberna de Miraia', 'next': 'EDRON'};
+      case DateTime.monday: return {'city': 'Svargrond', 'map': 'https://tibia.fandom.com/wiki/Special:FilePath/Svargrond.png'};
+      case DateTime.tuesday: return {'city': 'Liberty Bay', 'map': 'https://tibia.fandom.com/wiki/Special:FilePath/Liberty_Bay.png'};
+      case DateTime.wednesday: return {'city': 'Port Hope', 'map': 'https://tibia.fandom.com/wiki/Special:FilePath/Port_Hope.png'};
+      case DateTime.thursday: return {'city': 'Ankrahmun', 'map': 'https://tibia.fandom.com/wiki/Special:FilePath/Ankrahmun.png'};
+      case DateTime.friday: return {'city': 'Darashia', 'map': 'https://tibia.fandom.com/wiki/Special:FilePath/Darashia.PNG'};
+      case DateTime.saturday: return {'city': 'Edron', 'map': 'https://tibia.fandom.com/wiki/Special:FilePath/Edron.png'};
+      case DateTime.sunday: return {'city': 'Carlin', 'map': 'https://tibia.fandom.com/wiki/Special:FilePath/Carlin.png'};
+      default: return {'city': 'Darashia', 'map': 'https://tibia.fandom.com/wiki/Special:FilePath/Darashia.PNG'};
     }
   }
 
@@ -1023,78 +983,69 @@ class _WorldScreenState extends State<WorldScreen> with SingleTickerProviderStat
                 const Text("⏳ CUENTA REGRESIVA SERVER SAVE (SS)", style: TextStyle(color: Color(0xFF00E5FF), fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Text("$hours : $minutes : $seconds", style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 2)),
-                const SizedBox(height: 4),
-                const Text("Se reinicia diariamente a las 10:00 AM CET", style: TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace')),
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
 
+          // TARJETA DE RASHID EXACTAMENTE IDÉNTICA A TU FOTO DE REFERENCIA
           Container(
-            height: 220,
             decoration: BoxDecoration(
+              color: const Color(0xFF0E1424),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.amber.withOpacity(0.6), width: 1.5),
-              color: const Color(0xFF1B231A),
+              border: Border.all(color: Colors.white12),
             ),
-            child: Stack(
+            child: Column(
               children: [
-                CustomPaint(size: const Size(double.infinity, 220), painter: TibiaMinimapPainter()),
-                Positioned(
-                  top: 75,
-                  left: 140,
-                  child: Container(width: 60, height: 60, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.amber.withOpacity(0.4), width: 1.5))),
+                // Encabezado superior
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  color: const Color(0xFF070B14),
+                  child: const Center(
+                    child: Text("Todos los mundos", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                  ),
                 ),
-                AnimatedBuilder(
-                  animation: _walkController,
-                  builder: (context, child) {
-                    return Positioned(
-                      top: 85,
-                      left: 130 + (_walkController.value * 40),
-                      child: Column(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                            decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(3)),
-                            child: const Text("Rashid", style: TextStyle(color: Colors.amberAccent, fontSize: 9, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-                          ),
-                          const SizedBox(height: 2),
-                          const Text("🚶", style: TextStyle(fontSize: 26)),
-                        ],
+                // Imagen del mapa con Rashid sobrepuesto a la derecha
+                Container(
+                  height: 190,
+                  width: double.infinity,
+                  color: const Color(0xFF1B2E68),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Image.network(
+                          rData['map']!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(color: const Color(0xFF22356B)),
+                        ),
                       ),
-                    );
-                  },
+                      Positioned(
+                        right: 25,
+                        top: 40,
+                        child: Image.network(
+                          "https://tibia.fandom.com/wiki/Special:FilePath/Rashid.gif",
+                          width: 52,
+                          height: 52,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Text("🚶", style: TextStyle(fontSize: 32)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-            decoration: BoxDecoration(color: const Color(0xFF0E1424), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white12)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("📍 UBICACIÓN HOY: ${rData['city']}", style: const TextStyle(color: Colors.amber, fontFamily: 'monospace', fontSize: 13, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 2),
-                Text("Local: ${rData['spot']}", style: const TextStyle(color: Colors.white70, fontFamily: 'monospace', fontSize: 11)),
-                const Divider(color: Colors.white12, height: 12),
-                Text("⏭️ TRAS EL SS VA A: ${rData['next']}", style: const TextStyle(color: Colors.amberAccent, fontFamily: 'monospace', fontSize: 10)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFF0E1424), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF00FFB2).withOpacity(0.4))),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text("YASIR (BARCO ORIENTAL)", style: TextStyle(color: Color(0xFF00FFB2), fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 12)),
-                SizedBox(height: 6),
-                Text("Puertos posibles tras el Server Save:\n• Carlin (Muelle sur)\n• Liberty Bay (Muelle este)\n• Ankrahmun (Muelle oeste)", style: TextStyle(color: Colors.white70, fontFamily: 'monospace', fontSize: 11, height: 1.4)),
+                // Barra inferior azul marina
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  color: const Color(0xFF233660),
+                  child: Center(
+                    child: Text(
+                      "Rashid esta en ${rData['city']}",
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1102,31 +1053,6 @@ class _WorldScreenState extends State<WorldScreen> with SingleTickerProviderStat
       ),
     );
   }
-}
-
-class TibiaMinimapPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final bgPaint = Paint()..color = const Color(0xFF141A12);
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
-
-    final roadPaint = Paint()..color = const Color(0xFF382D1C);
-    canvas.drawRect(Rect.fromLTWH(40, 90, size.width - 80, 50), roadPaint);
-    canvas.drawRect(Rect.fromLTWH(130, 40, 80, 140), roadPaint);
-
-    final wallPaint = Paint()..color = const Color(0xFF5A5852)..strokeWidth = 3..style = PaintingStyle.stroke;
-    canvas.drawRect(Rect.fromLTWH(110, 60, 120, 80), wallPaint);
-
-    final roofPaint = Paint()..color = const Color(0xFF6B261D).withOpacity(0.5);
-    canvas.drawRect(Rect.fromLTWH(113, 63, 114, 74), roofPaint);
-
-    final gridPaint = Paint()..color = Colors.black26..strokeWidth = 1;
-    for (double i = 0; i < size.width; i += 20) { canvas.drawLine(Offset(i, 0), Offset(i, size.height), gridPaint); }
-    for (double i = 0; i < size.height; i += 20) { canvas.drawLine(Offset(0, i), Offset(size.width, i), gridPaint); }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // -------------------------------------------------------------
