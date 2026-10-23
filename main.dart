@@ -39,21 +39,19 @@ class TacticalAudio {
     return byteData.buffer.asUint8List();
   }
 
-  static Future<void> playBeepBeep() async {
+  // TRES PITIDOS SEGUIDOS ("PI - PI - PI")
+  static Future<void> playThreeBeeps() async {
     if (!soundEnabled) return;
     try {
       HapticFeedback.vibrate();
       const sampleRate = 22050;
       final samples = <double>[];
-      for (int i = 0; i < (sampleRate * 0.09).toInt(); i++) {
-        samples.add(math.sin(2 * math.pi * 1050 * i / sampleRate));
-      }
-      for (int i = 0; i < (sampleRate * 0.06).toInt(); i++) {
-        samples.add(0.0);
-      }
-      for (int i = 0; i < (sampleRate * 0.11).toInt(); i++) {
-        samples.add(math.sin(2 * math.pi * 1250 * i / sampleRate));
-      }
+      for (int i = 0; i < (sampleRate * 0.07).toInt(); i++) samples.add(math.sin(2 * math.pi * 1100 * i / sampleRate));
+      for (int i = 0; i < (sampleRate * 0.05).toInt(); i++) samples.add(0.0);
+      for (int i = 0; i < (sampleRate * 0.07).toInt(); i++) samples.add(math.sin(2 * math.pi * 1220 * i / sampleRate));
+      for (int i = 0; i < (sampleRate * 0.05).toInt(); i++) samples.add(0.0);
+      for (int i = 0; i < (sampleRate * 0.09).toInt(); i++) samples.add(math.sin(2 * math.pi * 1350 * i / sampleRate));
+
       final bytes = _createWav(sampleRate, samples);
       await _player.stop();
       await _player.play(BytesSource(bytes));
@@ -117,8 +115,24 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 }
 
+class TrackTarget {
+  final String name;
+  final String type; // 'amigo' o 'enemigo'
+  final String world; // 'Ferobra' o 'Quintera'
+
+  TrackTarget({required this.name, required this.type, required this.world});
+
+  Map<String, dynamic> toJson() => {'name': name, 'type': type, 'world': world};
+
+  factory TrackTarget.fromJson(Map<String, dynamic> json) => TrackTarget(
+        name: json['name'] ?? '',
+        type: json['type'] ?? 'enemigo',
+        world: json['world'] ?? 'Ferobra',
+      );
+}
+
 // -------------------------------------------------------------
-// PESTAÑA 1: WAR HUD (ONLINE PRIMERO, SPRITES & TIMERS)
+// PESTAÑA 1: WAR HUD (MUERTES CON MONSTRUOS Y PKS ANIMADOS)
 // -------------------------------------------------------------
 class RadarScreen extends StatefulWidget {
   const RadarScreen({super.key});
@@ -129,19 +143,26 @@ class RadarScreen extends StatefulWidget {
 
 class _RadarScreenState extends State<RadarScreen> {
   static const platform = MethodChannel('com.tactical.tibia/radar');
-  final String world = 'Ferobra';
-  List<String> targets = ['fingor', 'edwing ek'];
-  final TextEditingController _targetController = TextEditingController();
-  final TextEditingController _guildController = TextEditingController();
+  List<TrackTarget> targets = [
+    TrackTarget(name: 'fingor', type: 'amigo', world: 'Ferobra'),
+    TrackTarget(name: 'edwing ek', type: 'enemigo', world: 'Ferobra'),
+  ];
 
-  Map<String, dynamic> onlineTargets = {};
+  final TextEditingController _nameController = TextEditingController();
+  String selectedWorldInput = 'Ferobra';
+  String currentFilter = 'TODOS';
+
+  Map<String, dynamic> onlinePlayersData = {};
+  Map<String, Map<String, dynamic>> characterInfoCache = {};
   Map<String, List<dynamic>> characterDeaths = {};
   Map<String, bool> loadingDeaths = {};
-  
-  // Tiempos de conexión y sesiones
+
   Map<String, int> loginTimestamps = {};
   Map<String, int> sessionDurations = {};
   Map<String, String> logoutTimes = {};
+
+  Map<String, bool> muteLoginMap = {};
+  Map<String, bool> muteLogoutMap = {};
 
   List<String> radarLogs = [];
   bool isScanning = false;
@@ -149,7 +170,6 @@ class _RadarScreenState extends State<RadarScreen> {
   Timer? _timer;
   Timer? _clockUpdater;
 
-  // Selección masiva
   bool isSelectionMode = false;
   final Set<String> selectedTargets = {};
 
@@ -157,7 +177,6 @@ class _RadarScreenState extends State<RadarScreen> {
   void initState() {
     super.initState();
     initRadar();
-    // Actualiza los cronómetros de "En línea hace X min" cada 30 segundos
     _clockUpdater = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
     });
@@ -165,32 +184,58 @@ class _RadarScreenState extends State<RadarScreen> {
 
   Future<void> initRadar() async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getStringList('tibia_targets');
-    if (saved != null && saved.isNotEmpty) {
-      targets = saved;
+    final jsonStr = prefs.getString('spy_targets_json');
+    if (jsonStr != null && jsonStr.isNotEmpty) {
+      try {
+        final List decoded = json.decode(jsonStr);
+        targets = decoded.map((e) => TrackTarget.fromJson(e)).toList();
+      } catch (_) {}
     }
+
+    for (var t in targets) {
+      muteLoginMap[t.name.toLowerCase()] = prefs.getBool('mute_login_${t.name.toLowerCase()}') ?? false;
+      muteLogoutMap[t.name.toLowerCase()] = prefs.getBool('mute_logout_${t.name.toLowerCase()}') ?? false;
+      fetchCharacterDetails(t.name);
+    }
+
     setState(() {});
-    addLog("SPY FEROBRA INICIADO // RADAR TÁCTICO LISTO");
+    addLog("SPY FEROBRA & QUINTERA EN VIVO");
     syncNativeService();
-    scanRadar();
-    _timer = Timer.periodic(const Duration(seconds: 35), (timer) => scanRadar());
+    scanAllWorlds();
+    _timer = Timer.periodic(const Duration(seconds: 35), (_) => scanAllWorlds());
   }
 
   Future<void> syncNativeService() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = json.encode(targets.map((e) => e.toJson()).toList());
+    await prefs.setString('spy_targets_json', jsonStr);
+
     try {
       if (isBackgroundActive) {
-        await platform.invokeMethod('startRadarService', {'targets': targets});
+        await platform.invokeMethod('startRadarService');
       } else {
         await platform.invokeMethod('stopRadarService');
       }
     } catch (_) {}
   }
 
-  Future<void> updateTargetsNative() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('tibia_targets', targets);
+  Future<void> fetchCharacterDetails(String charName) async {
+    final key = charName.toLowerCase();
     try {
-      await platform.invokeMethod('updateTargets', {'targets': targets});
+      final res = await http.get(Uri.parse('https://api.tibiadata.com/v4/character/${Uri.encodeComponent(charName)}')).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        final ch = data['character']?['character'];
+        if (ch != null) {
+          setState(() {
+            characterInfoCache[key] = {
+              'level': ch['level'] ?? 0,
+              'vocation': ch['vocation'] ?? 'None',
+              'last_login': ch['last_login'] ?? '',
+            };
+          });
+        }
+      }
     } catch (_) {}
   }
 
@@ -198,8 +243,7 @@ class _RadarScreenState extends State<RadarScreen> {
   void dispose() {
     _timer?.cancel();
     _clockUpdater?.cancel();
-    _targetController.dispose();
-    _guildController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
@@ -211,72 +255,80 @@ class _RadarScreenState extends State<RadarScreen> {
     });
   }
 
-  // ORDEN DINÁMICO: CONECTADOS ARRIBA, DESCONECTADOS ABAJO AL INSTANTE
-  List<String> get dynamicSortedTargets {
-    final online = targets.where((t) => onlineTargets.containsKey(t)).toList();
-    final offline = targets.where((t) => !onlineTargets.containsKey(t)).toList();
-    online.sort((a, b) => a.compareTo(b));
-    offline.sort((a, b) => a.compareTo(b));
-    return [...online, ...offline];
+  List<TrackTarget> get dynamicFilteredTargets {
+    var list = targets.where((t) {
+      if (currentFilter == 'ENEMIGOS') return t.type == 'enemigo';
+      if (currentFilter == 'AMIGOS') return t.type == 'amigo';
+      return true;
+    }).toList();
+
+    list.sort((a, b) {
+      final aOnline = onlinePlayersData.containsKey(a.name.toLowerCase()) ? 1 : 0;
+      final bOnline = onlinePlayersData.containsKey(b.name.toLowerCase()) ? 1 : 0;
+      if (aOnline != bOnline) {
+        return bOnline.compareTo(aOnline);
+      }
+      return a.name.compareTo(b.name);
+    });
+    return list;
   }
 
-  Future<void> scanRadar() async {
+  Future<void> scanAllWorlds() async {
     setState(() => isScanning = true);
-    try {
-      final response = await http.get(
-        Uri.parse('https://api.tibiadata.com/v4/world/$world'),
-      ).timeout(const Duration(seconds: 15));
+    final worldsToScan = targets.map((t) => t.world).toSet();
+    if (worldsToScan.isEmpty) worldsToScan.add('Ferobra');
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List players = data['world']?['online_players'] ?? [];
+    Map<String, dynamic> newOnlineMap = {};
 
-        Map<String, dynamic> currentlyOnline = {};
-        final now = DateTime.now().millisecondsSinceEpoch;
+    for (var w in worldsToScan) {
+      try {
+        final response = await http.get(Uri.parse('https://api.tibiadata.com/v4/world/$w')).timeout(const Duration(seconds: 12));
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          final List players = data['world']?['online_players'] ?? [];
+          final now = DateTime.now().millisecondsSinceEpoch;
 
-        for (var p in players) {
-          final String name = p['name'].toString().toLowerCase();
-          if (targets.contains(name)) {
-            currentlyOnline[name] = p;
-            if (!onlineTargets.containsKey(name)) {
-              addLog("⚠️ [ONLINE]: ${p['name']} (Lvl ${p['level']})");
+          for (var p in players) {
+            final name = p['name'].toString().toLowerCase();
+            newOnlineMap[name] = p;
+
+            final isMonitored = targets.any((t) => t.name.toLowerCase() == name && t.world.toLowerCase() == w.toLowerCase());
+            if (isMonitored && !onlinePlayersData.containsKey(name)) {
               loginTimestamps[name] = now;
-              TacticalAudio.playBeepBeep();
+              final targetObj = targets.firstWhere((t) => t.name.toLowerCase() == name);
+              if (targetObj.type == 'enemigo' && muteLoginMap[name] != true) {
+                TacticalAudio.playThreeBeeps();
+              }
+              addLog("⚠️ [ONLINE]: ${p['name']} conectó en $w");
             }
           }
         }
-
-        for (var oldTarget in onlineTargets.keys) {
-          if (!currentlyOnline.containsKey(oldTarget)) {
-            addLog("🛑 [OFFLINE]: ${oldTarget.toUpperCase()} DESCONECTÓ");
-            if (loginTimestamps.containsKey(oldTarget)) {
-              sessionDurations[oldTarget] = now - loginTimestamps[oldTarget]!;
-            }
-            final dt = DateTime.now();
-            logoutTimes[oldTarget] = "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
-          }
-        }
-
-        setState(() {
-          onlineTargets = currentlyOnline;
-        });
-        addLog("Escaneo: ${players.length} conectados en Ferobra.");
-      }
-    } catch (_) {
-      addLog("Reintentando satélite...");
-    } finally {
-      setState(() => isScanning = false);
+      } catch (_) {}
     }
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (var oldName in onlinePlayersData.keys) {
+      if (!newOnlineMap.containsKey(oldName)) {
+        if (loginTimestamps.containsKey(oldName)) {
+          sessionDurations[oldName] = now - loginTimestamps[oldName]!;
+        }
+        final dt = DateTime.now();
+        logoutTimes[oldName] = "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+        addLog("🛑 [OFFLINE]: ${oldName.toUpperCase()} salió");
+      }
+    }
+
+    setState(() {
+      onlinePlayersData = newOnlineMap;
+      isScanning = false;
+    });
   }
 
   Future<void> fetchDeaths(String charName) async {
     if (characterDeaths.containsKey(charName)) return;
     setState(() => loadingDeaths[charName] = true);
     try {
-      final response = await http.get(
-        Uri.parse('https://api.tibiadata.com/v4/character/${Uri.encodeComponent(charName)}'),
-      ).timeout(const Duration(seconds: 12));
-
+      final response = await http.get(Uri.parse('https://api.tibiadata.com/v4/character/${Uri.encodeComponent(charName)}')).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final List deaths = data['character']?['deaths'] ?? [];
@@ -289,59 +341,25 @@ class _RadarScreenState extends State<RadarScreen> {
     }
   }
 
-  Future<void> importGuild() async {
-    final guildName = _guildController.text.trim();
-    if (guildName.isEmpty) return;
-    Navigator.pop(context);
-    addLog("Importando guild '$guildName'...");
-
-    try {
-      final response = await http.get(
-        Uri.parse('https://api.tibiadata.com/v4/guild/${Uri.encodeComponent(guildName)}'),
-      ).timeout(const Duration(seconds: 15));
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List members = data['guild']?['members'] ?? [];
-        int count = 0;
-
-        for (var m in members) {
-          final String name = m['name'].toString().toLowerCase();
-          if (!targets.contains(name)) {
-            targets.add(name);
-            count++;
-          }
-        }
-        await updateTargetsNative();
-        setState(() {});
-        addLog("GUILD CARGADA: +$count objetivos.");
-        scanRadar();
-      }
-    } catch (_) {
-      addLog("ERROR importando guild.");
-    }
-    _guildController.clear();
-  }
-
-  void addTarget() {
-    final text = _targetController.text.trim().toLowerCase();
-    if (text.isNotEmpty && !targets.contains(text)) {
-      setState(() => targets.add(text));
-      updateTargetsNative();
-      addLog("Añadido: ${text.toUpperCase()}");
-      _targetController.clear();
-      scanRadar();
+  void addTarget(String type) {
+    final text = _nameController.text.trim();
+    if (text.isNotEmpty && !targets.any((t) => t.name.toLowerCase() == text.toLowerCase())) {
+      final newT = TrackTarget(name: text, type: type, world: selectedWorldInput);
+      setState(() => targets.add(newT));
+      fetchCharacterDetails(text);
+      syncNativeService();
+      addLog("Nuevo $type en $selectedWorldInput: ${text.toUpperCase()}");
+      _nameController.clear();
+      scanAllWorlds();
     }
   }
 
   void removeTarget(String name) {
     setState(() {
-      targets.remove(name);
-      onlineTargets.remove(name);
-      characterDeaths.remove(name);
-      selectedTargets.remove(name);
+      targets.removeWhere((t) => t.name.toLowerCase() == name.toLowerCase());
+      selectedTargets.remove(name.toLowerCase());
     });
-    updateTargetsNative();
+    syncNativeService();
     addLog("Removido: ${name.toUpperCase()}");
   }
 
@@ -350,16 +368,12 @@ class _RadarScreenState extends State<RadarScreen> {
     if (count == 0) return;
 
     setState(() {
-      targets.removeWhere((t) => selectedTargets.contains(t));
-      for (var t in selectedTargets) {
-        onlineTargets.remove(t);
-        characterDeaths.remove(t);
-      }
+      targets.removeWhere((t) => selectedTargets.contains(t.name.toLowerCase()));
       selectedTargets.clear();
       isSelectionMode = false;
     });
-    updateTargetsNative();
-    addLog("Se eliminaron $count objetivos seleccionados.");
+    syncNativeService();
+    addLog("Se eliminaron $count objetivos.");
   }
 
   void selectAllTargets() {
@@ -367,7 +381,7 @@ class _RadarScreenState extends State<RadarScreen> {
       if (selectedTargets.length == targets.length) {
         selectedTargets.clear();
       } else {
-        selectedTargets.addAll(targets);
+        selectedTargets.addAll(targets.map((t) => t.name.toLowerCase()));
       }
     });
   }
@@ -378,7 +392,7 @@ class _RadarScreenState extends State<RadarScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF14080D),
         title: const Text("¿PURGAR LISTA COMPLETA?", style: TextStyle(color: Color(0xFFFF0055), fontSize: 14, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-        content: const Text("Se eliminarán todos los enemigos de Spy Ferobra.", style: TextStyle(color: Colors.white70, fontSize: 12, fontFamily: 'monospace')),
+        content: const Text("Se borrarán todos los personajes (Amigos y Enemigos).", style: TextStyle(color: Colors.white70, fontSize: 12, fontFamily: 'monospace')),
         actions: [
           TextButton(child: const Text("CANCELAR", style: TextStyle(color: Colors.grey)), onPressed: () => Navigator.pop(ctx)),
           ElevatedButton(
@@ -387,12 +401,10 @@ class _RadarScreenState extends State<RadarScreen> {
               Navigator.pop(ctx);
               setState(() {
                 targets.clear();
-                onlineTargets.clear();
-                characterDeaths.clear();
                 selectedTargets.clear();
                 isSelectionMode = false;
               });
-              updateTargetsNative();
+              syncNativeService();
               addLog("LISTA PURGADA POR COMPLETO.");
             },
             child: const Text("PURGAR TODO"),
@@ -402,8 +414,64 @@ class _RadarScreenState extends State<RadarScreen> {
     );
   }
 
-  // SPRITE DE VOCACIÓN ANIMADO EN MINIATURA
-  Widget _getVocationAvatar(String? vocation, bool isOnline) {
+  void _showIndividualAlertConfig(TrackTarget target) {
+    final key = target.name.toLowerCase();
+    bool muteLogin = muteLoginMap[key] ?? false;
+    bool muteLogout = muteLogoutMap[key] ?? false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF0D121E),
+          title: Text(
+            "${target.type.toUpperCase()}: ${target.name.toUpperCase()} (${target.world})",
+            style: TextStyle(color: target.type == 'amigo' ? const Color(0xFF00FFB2) : const Color(0xFF00E5FF), fontFamily: 'monospace', fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SwitchListTile(
+                title: const Text("Avisar al Conectar", style: TextStyle(fontSize: 12, fontFamily: 'monospace')),
+                subtitle: Text("Voz anunciando que conectó en ${target.world}", style: const TextStyle(fontSize: 10, color: Colors.white38)),
+                value: !muteLogin,
+                activeColor: const Color(0xFF00FFB2),
+                onChanged: (val) => setDialogState(() => muteLogin = !val),
+              ),
+              const Divider(color: Colors.white12),
+              SwitchListTile(
+                title: const Text("Avisar al Desconectar", style: TextStyle(fontSize: 12, fontFamily: 'monospace')),
+                subtitle: Text(target.type == 'enemigo' ? "Voz y sirena de 1s" : "Voz avisando desconexión", style: const TextStyle(fontSize: 10, color: Colors.white38)),
+                value: !muteLogout,
+                activeColor: const Color(0xFF00FFB2),
+                onChanged: (val) => setDialogState(() => muteLogout = !val),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(child: const Text("CANCELAR", style: TextStyle(color: Colors.grey)), onPressed: () => Navigator.pop(ctx)),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E5FF), foregroundColor: Colors.black),
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('mute_login_$key', muteLogin);
+                await prefs.setBool('mute_logout_$key', muteLogout);
+                setState(() {
+                  muteLoginMap[key] = muteLogin;
+                  muteLogoutMap[key] = muteLogout;
+                });
+                Navigator.pop(ctx);
+                addLog("Configuración guardada para ${target.name.toUpperCase()}");
+              },
+              child: const Text("GUARDAR"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _getVocationAvatar(String? vocation, bool isOnline, String type) {
     final voc = (vocation ?? '').toLowerCase();
     String iconText = "⚔️";
     Color vocColor = Colors.grey;
@@ -422,29 +490,87 @@ class _RadarScreenState extends State<RadarScreen> {
       vocColor = Colors.cyanAccent;
     }
 
+    final borderColor = isOnline ? (type == 'amigo' ? const Color(0xFF00FFB2) : const Color(0xFF00E5FF)) : Colors.white12;
+
     return Container(
       width: 44,
       height: 44,
       decoration: BoxDecoration(
         color: const Color(0xFF070B14),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: isOnline ? const Color(0xFF00FFB2) : Colors.white12,
-          width: isOnline ? 1.5 : 1.0,
-        ),
+        border: Border.all(color: borderColor, width: isOnline ? 1.5 : 1.0),
       ),
       child: Center(
         child: Text(
           iconText,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'monospace',
-            color: isOnline ? vocColor : Colors.white30,
-          ),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace', color: isOnline ? vocColor : Colors.white30),
         ),
       ),
     );
+  }
+
+  // WIDGET PARA DIBUJAR AL MONSTRUO O AL PLAYER KILLER (ANIMADO)
+  Widget _buildKillerSprite(dynamic death) {
+    final killers = death['killers'] as List? ?? [];
+    if (killers.isEmpty) {
+      return const Text("💀", style: TextStyle(fontSize: 20));
+    }
+
+    final firstKiller = killers.first;
+    final killerName = firstKiller['name']?.toString() ?? 'Monstruo';
+    final isPlayer = firstKiller['player'] == true;
+
+    if (isPlayer) {
+      // SI FUE ASESINADO POR UN JUGADOR (PvP / PK en Guerra)
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2E0909),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.redAccent, width: 1.2),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("⚔️ 💀", style: TextStyle(fontSize: 14)),
+            const SizedBox(width: 4),
+            Text(
+              "PK: ${killerName.toUpperCase()}",
+              style: const TextStyle(color: Color(0xFFFF5252), fontWeight: FontWeight.bold, fontFamily: 'monospace', fontSize: 10),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // SI FUE ASESINADO POR UN MONSTRUO (Muestra la miniatura animada del monstruo)
+      final cleanName = killerName.replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '').trim();
+      final formattedUrl = "https://tibia.fandom.com/wiki/Special:FilePath/${Uri.encodeComponent(cleanName)}.gif";
+
+      return Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: const Color(0xFF101625),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.network(
+              formattedUrl,
+              width: 32,
+              height: 32,
+              errorBuilder: (_, __, ___) => const Text("👾", style: TextStyle(fontSize: 16)),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              cleanName.toUpperCase(),
+              style: const TextStyle(color: Color(0xFF80DEEA), fontFamily: 'monospace', fontSize: 10, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   String formatDuration(int millis) {
@@ -455,22 +581,9 @@ class _RadarScreenState extends State<RadarScreen> {
     return "${hrs}h ${remMins}m";
   }
 
-  Map<String, int> get vocationCounts {
-    int ek = 0, ed = 0, ms = 0, rp = 0;
-    for (var info in onlineTargets.values) {
-      final voc = info['vocation']?.toString().toLowerCase() ?? '';
-      if (voc.contains('knight')) ek++;
-      if (voc.contains('druid')) ed++;
-      if (voc.contains('sorcerer')) ms++;
-      if (voc.contains('paladin')) rp++;
-    }
-    return {'EK': ek, 'ED': ed, 'MS': ms, 'RP': rp};
-  }
-
   @override
   Widget build(BuildContext context) {
-    final vocs = vocationCounts;
-    final displayList = dynamicSortedTargets;
+    final displayList = dynamicFilteredTargets;
 
     return Scaffold(
       appBar: AppBar(
@@ -489,26 +602,21 @@ class _RadarScreenState extends State<RadarScreen> {
                 ],
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             const Text(
-              "SPY FEROBRA // RADAR",
-              style: TextStyle(fontFamily: 'monospace', fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF00E5FF), letterSpacing: 1.5),
+              "SPY // FEROBRA & QUINTERA",
+              style: TextStyle(fontFamily: 'monospace', fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF00E5FF), letterSpacing: 1.0),
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: Icon(
-              TacticalAudio.soundEnabled ? Icons.volume_up : Icons.volume_off,
-              color: TacticalAudio.soundEnabled ? const Color(0xFF00E5FF) : Colors.grey,
-            ),
-            onPressed: () {
-              setState(() => TacticalAudio.soundEnabled = !TacticalAudio.soundEnabled);
-            },
+            icon: Icon(TacticalAudio.soundEnabled ? Icons.volume_up : Icons.volume_off, color: TacticalAudio.soundEnabled ? const Color(0xFF00E5FF) : Colors.grey),
+            onPressed: () => setState(() => TacticalAudio.soundEnabled = !TacticalAudio.soundEnabled),
           ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Color(0xFF00E5FF)),
-            onPressed: isScanning ? null : scanRadar,
+            onPressed: isScanning ? null : scanAllWorlds,
           )
         ],
       ),
@@ -517,89 +625,76 @@ class _RadarScreenState extends State<RadarScreen> {
         child: Column(
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0A101C),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: isBackgroundActive ? const Color(0xFF00FFB2) : Colors.redAccent, width: 1.2),
-              ),
-              child: Row(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: const Color(0xFF0E1424), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white12)),
+              child: Column(
                 children: [
-                  Icon(isBackgroundActive ? Icons.security : Icons.security_update_warning, color: isBackgroundActive ? const Color(0xFF00FFB2) : Colors.redAccent, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      isBackgroundActive ? "SPY 24/7 EN SEGUNDO PLANO: ACTIVO" : "SEGUNDO PLANO: DESACTIVADO",
-                      style: TextStyle(fontFamily: 'monospace', fontSize: 10, fontWeight: FontWeight.bold, color: isBackgroundActive ? const Color(0xFF00FFB2) : Colors.redAccent),
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _nameController,
+                          style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
+                          decoration: const InputDecoration(hintText: "Nombre del personaje...", hintStyle: TextStyle(color: Colors.white30, fontSize: 12), border: InputBorder.none),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        decoration: BoxDecoration(color: const Color(0xFF162035), borderRadius: BorderRadius.circular(4)),
+                        child: DropdownButton<String>(
+                          value: selectedWorldInput,
+                          dropdownColor: const Color(0xFF0E1424),
+                          underline: const SizedBox(),
+                          style: const TextStyle(color: Color(0xFF00E5FF), fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold),
+                          items: ['Ferobra', 'Quintera'].map((w) => DropdownMenuItem(value: w, child: Text(w))).toList(),
+                          onChanged: (val) {
+                            if (val != null) setState(() => selectedWorldInput = val);
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                  Switch(
-                    value: isBackgroundActive,
-                    activeColor: const Color(0xFF00FFB2),
-                    onChanged: (val) {
-                      setState(() => isBackgroundActive = val);
-                      syncNativeService();
-                    },
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00FFB2),
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                        ).buildWidget(
+                          onPressed: () => addTarget('amigo'),
+                          child: const Text("🛡️ + AMIGO", style: TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF5252),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                        ).buildWidget(
+                          onPressed: () => addTarget('enemigo'),
+                          child: const Text("⚔️ + ENEMIGO", style: TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
                   )
                 ],
               ),
             ),
             const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-              decoration: BoxDecoration(color: const Color(0xFF080C14), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3))),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _vocBadge("EK", vocs['EK']!, Colors.amber),
-                  _vocBadge("ED", vocs['ED']!, Colors.greenAccent),
-                  _vocBadge("MS", vocs['MS']!, Colors.purpleAccent),
-                  _vocBadge("RP", vocs['RP']!, Colors.cyanAccent),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(color: const Color(0xFF101625), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white24)),
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: TextField(
-                      controller: _targetController,
-                      style: const TextStyle(color: Colors.white, fontFamily: 'monospace'),
-                      decoration: const InputDecoration(hintText: "ENEMIGO...", hintStyle: TextStyle(color: Colors.white30, fontSize: 13), border: InputBorder.none),
-                      onSubmitted: (_) => addTarget(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E5FF), foregroundColor: Colors.black, textStyle: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-                  onPressed: addTarget,
-                  child: const Text("+ TARGET"),
-                ),
-                const SizedBox(width: 6),
-                IconButton(
-                  style: IconButton.styleFrom(backgroundColor: const Color(0xFF162035), foregroundColor: const Color(0xFF00E5FF)),
-                  icon: const Icon(Icons.shield, size: 20),
-                  onPressed: () => _showGuildDialog(),
-                )
-              ],
-            ),
-            const SizedBox(height: 8),
 
-            // BARRA TÁCTICA DE ACCIONES MASIVAS
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                TextButton.icon(
-                  style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                  icon: Icon(isSelectionMode ? Icons.close : Icons.checklist, size: 16, color: const Color(0xFF00E5FF)),
-                  label: Text(
-                    isSelectionMode ? "CANCELAR" : "MODO SELECCIÓN",
-                    style: const TextStyle(color: Color(0xFF00E5FF), fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
+                _filterBtn('TODOS'),
+                const SizedBox(width: 6),
+                _filterBtn('ENEMIGOS'),
+                const SizedBox(width: 6),
+                _filterBtn('AMIGOS'),
+                const Spacer(),
+                IconButton(
+                  icon: Icon(isSelectionMode ? Icons.close : Icons.checklist, size: 20, color: const Color(0xFF00E5FF)),
                   onPressed: () {
                     setState(() {
                       isSelectionMode = !isSelectionMode;
@@ -607,171 +702,196 @@ class _RadarScreenState extends State<RadarScreen> {
                     });
                   },
                 ),
-                if (isSelectionMode) ...[
-                  TextButton(
-                    onPressed: selectAllTargets,
-                    child: Text(
-                      selectedTargets.length == targets.length ? "DESMARCAR" : "TODOS (${targets.length})",
-                      style: const TextStyle(color: Colors.amber, fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF0055),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    ),
-                    onPressed: selectedTargets.isEmpty ? null : deleteSelectedTargets,
-                    child: Text(
-                      "BORRAR (${selectedTargets.length})",
-                      style: const TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                  ),
-                ] else ...[
-                  TextButton.icon(
-                    style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                    icon: const Icon(Icons.delete_sweep, size: 16, color: Colors.redAccent),
-                    label: const Text(
-                      "PURGAR LISTA",
-                      style: TextStyle(color: Colors.redAccent, fontFamily: 'monospace', fontSize: 11),
-                    ),
-                    onPressed: targets.isEmpty ? null : clearAllTargets,
-                  ),
-                ],
               ],
             ),
 
-            // LISTA ORDENADA DINÁMICAMENTE (CONECTADOS ARRIBA)
+            if (isSelectionMode)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton(
+                      onPressed: selectAllTargets,
+                      child: Text(selectedTargets.length == targets.length ? "DESMARCAR" : "TODOS (${targets.length})", style: const TextStyle(color: Colors.amber, fontFamily: 'monospace', fontSize: 11)),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF0055), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4)),
+                      onPressed: selectedTargets.isEmpty ? null : deleteSelectedTargets,
+                      child: Text("BORRAR (${selectedTargets.length})", style: const TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ),
+
             Expanded(
               flex: 4,
               child: ListView.builder(
                 itemCount: displayList.length,
                 itemBuilder: (context, index) {
                   final target = displayList[index];
-                  final isOnline = onlineTargets.containsKey(target);
-                  final data = onlineTargets[target];
-                  final deaths = characterDeaths[target];
-                  final isLoadingThisDeath = loadingDeaths[target] ?? false;
-                  final isChecked = selectedTargets.contains(target);
+                  final key = target.name.toLowerCase();
+                  final isOnline = onlinePlayersData.containsKey(key);
+                  final onlineData = onlinePlayersData[key];
+                  final cachedInfo = characterInfoCache[key] ?? {};
+                  final deaths = characterDeaths[target.name] ?? [];
+                  final isChecked = selectedTargets.contains(key);
 
-                  // Cálculo de cronómetro
+                  final level = isOnline ? (onlineData['level'] ?? 0) : (cachedInfo['level'] ?? 0);
+                  final vocation = isOnline ? (onlineData['vocation'] ?? '') : (cachedInfo['vocation'] ?? 'Consultando...');
+
                   String timerText = "";
                   if (isOnline) {
-                    if (loginTimestamps.containsKey(target)) {
-                      final diff = DateTime.now().millisecondsSinceEpoch - loginTimestamps[target]!;
-                      timerText = "⏱️ En línea hace: ${formatDuration(diff)}";
+                    if (loginTimestamps.containsKey(key)) {
+                      final diff = DateTime.now().millisecondsSinceEpoch - loginTimestamps[key]!;
+                      timerText = "⏱️ En línea: ${formatDuration(diff)}";
                     } else {
                       timerText = "⏱️ En línea";
                     }
                   } else {
-                    if (sessionDurations.containsKey(target)) {
-                      final dur = formatDuration(sessionDurations[target]!);
-                      final outAt = logoutTimes[target] ?? "";
-                      timerText = "⏳ Duró: $dur ${outAt.isNotEmpty ? '(Salió $outAt)' : ''}";
+                    if (sessionDurations.containsKey(key)) {
+                      final dur = formatDuration(sessionDurations[key]!);
+                      final outAt = logoutTimes[key] ?? "";
+                      timerText = "🕒 Salió hace poco (Duró $dur)";
                     } else {
-                      timerText = "OFFLINE // Desconectado";
+                      timerText = "⚫ Desconectado";
                     }
                   }
 
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0C111C),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: isOnline ? const Color(0xFF00FFB2) : Colors.white12,
-                        width: isOnline ? 1.6 : 1.0,
+                  final cardBorderColor = isOnline
+                      ? (target.type == 'amigo' ? const Color(0xFF00FFB2) : const Color(0xFF00E5FF))
+                      : Colors.white12;
+
+                  return InkWell(
+                    onLongPress: () => _showIndividualAlertConfig(target),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0C111C),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: cardBorderColor, width: isOnline ? 1.6 : 1.0),
+                        boxShadow: isOnline ? [BoxShadow(color: cardBorderColor.withOpacity(0.18), blurRadius: 6, spreadRadius: 1)] : [],
                       ),
-                      boxShadow: isOnline
-                          ? [
-                              BoxShadow(color: const Color(0xFF00FFB2).withOpacity(0.18), blurRadius: 8, spreadRadius: 1)
-                            ]
-                          : [],
-                    ),
-                    child: Theme(
-                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                      child: ExpansionTile(
-                        onExpansionChanged: (expanded) {
-                          if (expanded) fetchDeaths(target);
-                        },
-                        leading: isSelectionMode
-                            ? Checkbox(
-                                activeColor: const Color(0xFF00E5FF),
-                                checkColor: Colors.black,
-                                value: isChecked,
-                                onChanged: (val) {
-                                  setState(() {
-                                    if (val == true) {
-                                      selectedTargets.add(target);
-                                    } else {
-                                      selectedTargets.remove(target);
-                                    }
-                                  });
-                                },
-                              )
-                            : _getVocationAvatar(data?['vocation'], isOnline),
-                        title: Row(
-                          children: [
-                            Text(
-                              target.toUpperCase(),
-                              style: TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, color: isOnline ? Colors.white : Colors.white60),
-                            ),
-                            if (isOnline) ...[
-                              const SizedBox(width: 8),
+                      child: Theme(
+                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                        child: ExpansionTile(
+                          onExpansionChanged: (expanded) {
+                            if (expanded) fetchDeaths(target.name);
+                          },
+                          leading: isSelectionMode
+                              ? Checkbox(
+                                  activeColor: const Color(0xFF00E5FF),
+                                  checkColor: Colors.black,
+                                  value: isChecked,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      if (val == true) {
+                                        selectedTargets.add(key);
+                                      } else {
+                                        selectedTargets.remove(key);
+                                      }
+                                    });
+                                  },
+                                )
+                              : _getVocationAvatar(vocation, isOnline, target.type),
+                          title: Row(
+                            children: [
+                              Text(
+                                target.name.toUpperCase(),
+                                style: TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13, color: isOnline ? Colors.white : Colors.white60),
+                              ),
+                              const SizedBox(width: 6),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(color: const Color(0xFF00FFB2).withOpacity(0.2), borderRadius: BorderRadius.circular(4)),
-                                child: const Text("ONLINE", style: TextStyle(color: Color(0xFF00FFB2), fontSize: 9, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: target.world == 'Ferobra' ? const Color(0xFF00E5FF).withOpacity(0.15) : Colors.amber.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: Text(
+                                  target.world.toUpperCase(),
+                                  style: TextStyle(fontSize: 8, fontFamily: 'monospace', fontWeight: FontWeight.bold, color: target.world == 'Ferobra' ? const Color(0xFF00E5FF) : Colors.amber),
+                                ),
                               ),
-                            ]
-                          ],
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: isOnline ? const Color(0xFF00FFB2).withOpacity(0.2) : Colors.white10,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  isOnline ? "ONLINE" : "OFFLINE",
+                                  style: TextStyle(color: isOnline ? const Color(0xFF00FFB2) : Colors.white38, fontSize: 9, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+                                ),
+                              )
+                            ],
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 2),
+                              Text(
+                                "Lvl $level | $vocation",
+                                style: TextStyle(color: isOnline ? Colors.white70 : Colors.white38, fontSize: 11, fontFamily: 'monospace'),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                timerText,
+                                style: TextStyle(color: isOnline ? Colors.amberAccent : Colors.white30, fontSize: 9, fontFamily: 'monospace'),
+                              ),
+                            ],
+                          ),
+                          trailing: isSelectionMode
+                              ? null
+                              : IconButton(
+                                  icon: const Icon(Icons.close, color: Colors.redAccent, size: 16),
+                                  onPressed: () => removeTarget(target.name),
+                                ),
                           children: [
-                            Text(
-                              isOnline ? "Lvl ${data['level']} | ${data['vocation']}" : "Toca para ver muertes",
-                              style: TextStyle(color: isOnline ? const Color(0xFF00FFB2) : Colors.white38, fontSize: 11, fontFamily: 'monospace'),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              timerText,
-                              style: TextStyle(color: isOnline ? Colors.amberAccent : Colors.white30, fontSize: 10, fontFamily: 'monospace'),
-                            ),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              color: const Color(0xFF06080D),
+                              width: double.infinity,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text("💀 HISTORIAL DE MUERTES CON MINIATURAS:", style: TextStyle(color: Color(0xFFFF5252), fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+                                  const SizedBox(height: 8),
+                                  if (loadingDeaths[target.name] ?? false)
+                                    const Center(child: Padding(padding: EdgeInsets.all(8.0), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00E5FF)))))
+                                  else if (deaths.isEmpty)
+                                    const Text("Sin muertes recientes registradas en Tibia.", style: TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace'))
+                                  else
+                                    ...deaths.take(5).map((d) {
+                                      final time = d['time']?.toString().split('T').first ?? '';
+                                      final lvl = d['level'] ?? 0;
+
+                                      return Container(
+                                        margin: const EdgeInsets.only(bottom: 6),
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(color: const Color(0xFF0B101A), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white10)),
+                                        child: Row(
+                                          children: [
+                                            _buildKillerSprite(d), // MINIATURA DEL MONSTRUO O PK
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text("Lvl $lvl en $time", style: const TextStyle(color: Colors.white70, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                                                  Text(d['reason'] ?? '', style: const TextStyle(color: Colors.white38, fontSize: 9, fontFamily: 'monospace'), maxLines: 2),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }),
+                                ],
+                              ),
+                            )
                           ],
                         ),
-                        trailing: isSelectionMode
-                            ? null
-                            : IconButton(
-                                icon: const Icon(Icons.close, color: Colors.redAccent, size: 18),
-                                onPressed: () => removeTarget(target),
-                              ),
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            color: const Color(0xFF06080D),
-                            width: double.infinity,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text("💀 HISTORIAL DE MUERTES RECIENTES:", style: TextStyle(color: Color(0xFFFF5252), fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-                                const SizedBox(height: 6),
-                                if (isLoadingThisDeath)
-                                  const Center(child: Padding(padding: EdgeInsets.all(8.0), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00E5FF)))))
-                                else if (deaths == null || deaths.isEmpty)
-                                  const Text("Sin muertes recientes registradas.", style: TextStyle(color: Colors.white38, fontSize: 11, fontFamily: 'monospace'))
-                                else
-                                  ...deaths.take(4).map((d) {
-                                    final time = d['time']?.toString().split('T').first ?? '';
-                                    final reason = d['reason'] ?? 'Murió';
-                                    return Padding(
-                                      padding: const EdgeInsets.only(bottom: 4.0),
-                                      child: Text("• [$time] $reason", style: const TextStyle(color: Color(0xFFFF8A80), fontSize: 11, fontFamily: 'monospace')),
-                                    );
-                                  }),
-                              ],
-                            ),
-                          )
-                        ],
                       ),
                     ),
                   );
@@ -800,36 +920,28 @@ class _RadarScreenState extends State<RadarScreen> {
     );
   }
 
-  Widget _vocBadge(String voc, int count, Color color) {
-    return Row(
-      children: [
-        Text("$voc: ", style: TextStyle(color: color, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-        Text("$count", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-      ],
-    );
-  }
-
-  void _showGuildDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0E131E),
-        title: const Text("IMPORTAR GUILD ENEMIGA", style: TextStyle(color: Color(0xFF00E5FF), fontSize: 14)),
-        content: TextField(
-          controller: _guildController,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(hintText: "Nombre de la guild...", hintStyle: TextStyle(color: Colors.white30)),
+  Widget _filterBtn(String label) {
+    final isSelected = currentFilter == label;
+    return GestureDetector(
+      onTap: () => setState(() => currentFilter = label),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF00E5FF) : const Color(0xFF101625),
+          borderRadius: BorderRadius.circular(4),
         ),
-        actions: [
-          TextButton(child: const Text("Cancelar", style: TextStyle(color: Colors.grey)), onPressed: () => Navigator.pop(ctx)),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E5FF), foregroundColor: Colors.black),
-            onPressed: importGuild,
-            child: const Text("IMPORTAR"),
-          ),
-        ],
+        child: Text(
+          label,
+          style: TextStyle(fontFamily: 'monospace', fontSize: 10, fontWeight: FontWeight.bold, color: isSelected ? Colors.black : Colors.white60),
+        ),
       ),
     );
+  }
+}
+
+extension ElevatedButtonExtension on ButtonStyle {
+  Widget buildWidget({required VoidCallback onPressed, required Widget child}) {
+    return ElevatedButton(style: this, onPressed: onPressed, child: child);
   }
 }
 
@@ -877,22 +989,14 @@ class _WorldScreenState extends State<WorldScreen> with SingleTickerProviderStat
   Map<String, String> getRashidData() {
     final now = DateTime.now();
     switch (now.weekday) {
-      case DateTime.monday:
-        return {'city': 'SVARGROND', 'spot': 'Taberna de Dankwart (al sur del barco)', 'next': 'LIBERTY BAY'};
-      case DateTime.tuesday:
-        return {'city': 'LIBERTY BAY', 'spot': 'Taberna de Lyonel (1er piso)', 'next': 'PORT HOPE'};
-      case DateTime.wednesday:
-        return {'city': 'PORT HOPE', 'spot': 'Barco de Clyde (segundo piso)', 'next': 'ANKRAHMUN'};
-      case DateTime.thursday:
-        return {'city': 'ANKRAHMUN', 'spot': 'Taberna de Arito (sobre el depósito)', 'next': 'DARASHIA'};
-      case DateTime.friday:
-        return {'city': 'DARASHIA', 'spot': 'Taberna de Miraia (al sur del banco)', 'next': 'EDRON'};
-      case DateTime.saturday:
-        return {'city': 'EDRON', 'spot': 'Taberna de Mirabell (arriba del depósito)', 'next': 'CARLIN'};
-      case DateTime.sunday:
-        return {'city': 'CARLIN', 'spot': 'Depósito central (segundo piso)', 'next': 'SVARGROND'};
-      default:
-        return {'city': 'DARASHIA', 'spot': 'Taberna de Miraia', 'next': 'EDRON'};
+      case DateTime.monday: return {'city': 'SVARGROND', 'spot': 'Taberna de Dankwart (al sur del barco)', 'next': 'LIBERTY BAY'};
+      case DateTime.tuesday: return {'city': 'LIBERTY BAY', 'spot': 'Taberna de Lyonel (1er piso)', 'next': 'PORT HOPE'};
+      case DateTime.wednesday: return {'city': 'PORT HOPE', 'spot': 'Barco de Clyde (segundo piso)', 'next': 'ANKRAHMUN'};
+      case DateTime.thursday: return {'city': 'ANKRAHMUN', 'spot': 'Taberna de Arito (sobre el depósito)', 'next': 'DARASHIA'};
+      case DateTime.friday: return {'city': 'DARASHIA', 'spot': 'Taberna de Miraia (al sur del banco)', 'next': 'EDRON'};
+      case DateTime.saturday: return {'city': 'EDRON', 'spot': 'Taberna de Mirabell (arriba del depósito)', 'next': 'CARLIN'};
+      case DateTime.sunday: return {'city': 'CARLIN', 'spot': 'Depósito central (segundo piso)', 'next': 'SVARGROND'};
+      default: return {'city': 'DARASHIA', 'spot': 'Taberna de Miraia', 'next': 'EDRON'};
     }
   }
 
@@ -913,11 +1017,7 @@ class _WorldScreenState extends State<WorldScreen> with SingleTickerProviderStat
         children: [
           Container(
             padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0B101D),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF00E5FF)),
-            ),
+            decoration: BoxDecoration(color: const Color(0xFF0B101D), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF00E5FF))),
             child: Column(
               children: [
                 const Text("⏳ CUENTA REGRESIVA SERVER SAVE (SS)", style: TextStyle(color: Color(0xFF00E5FF), fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
@@ -930,35 +1030,21 @@ class _WorldScreenState extends State<WorldScreen> with SingleTickerProviderStat
           ),
           const SizedBox(height: 14),
 
-          // MINIMAPA REAL DEL JUEGO CON RASHID CAMINANDO
           Container(
             height: 220,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Colors.amber.withOpacity(0.6), width: 1.5),
-              color: const Color(0xFF1B231A), // Tono base mapa Tibia
+              color: const Color(0xFF1B231A),
             ),
             child: Stack(
               children: [
-                // Textura simulada de Minimapa Oficial de Tibia (cuadrícula, paredes y calles)
-                CustomPaint(
-                  size: const Size(double.infinity, 220),
-                  painter: TibiaMinimapPainter(),
-                ),
-                // Retícula de mira sobre la taberna
+                CustomPaint(size: const Size(double.infinity, 220), painter: TibiaMinimapPainter()),
                 Positioned(
                   top: 75,
                   left: 140,
-                  child: Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.amber.withOpacity(0.4), width: 1.5),
-                    ),
-                  ),
+                  child: Container(width: 60, height: 60, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.amber.withOpacity(0.4), width: 1.5))),
                 ),
-                // RASHID ANIMADO CAMINANDO SOBRE EL MAPA
                 AnimatedBuilder(
                   animation: _walkController,
                   builder: (context, child) {
@@ -973,7 +1059,7 @@ class _WorldScreenState extends State<WorldScreen> with SingleTickerProviderStat
                             child: const Text("Rashid", style: TextStyle(color: Colors.amberAccent, fontSize: 9, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
                           ),
                           const SizedBox(height: 2),
-                          const Text("🚶", style: TextStyle(fontSize: 26)), // Muñeco de Rashid
+                          const Text("🚶", style: TextStyle(fontSize: 26)),
                         ],
                       ),
                     );
@@ -984,14 +1070,9 @@ class _WorldScreenState extends State<WorldScreen> with SingleTickerProviderStat
           ),
           const SizedBox(height: 8),
 
-          // NOMBRE DE LA CIUDAD EN LETRAS PEQUEÑAS ABAJO DEL MAPA
           Container(
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0E1424),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: Colors.white12),
-            ),
+            decoration: BoxDecoration(color: const Color(0xFF0E1424), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white12)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1005,26 +1086,15 @@ class _WorldScreenState extends State<WorldScreen> with SingleTickerProviderStat
           ),
           const SizedBox(height: 14),
 
-          // ESTADO DE YASIR
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0E1424),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF00FFB2).withOpacity(0.4)),
-            ),
+            decoration: BoxDecoration(color: const Color(0xFF0E1424), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF00FFB2).withOpacity(0.4))),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: const [
-                    Icon(Icons.directions_boat, color: Color(0xFF00FFB2), size: 18),
-                    SizedBox(width: 8),
-                    Text("YASIR (BARCO ORIENTAL)", style: TextStyle(color: Color(0xFF00FFB2), fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 12)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                const Text("Eventos posibles de atraco tras el Server Save:\n• Carlin (Muelle sur)\n• Liberty Bay (Muelle este)\n• Ankrahmun (Muelle oeste)", style: TextStyle(color: Colors.white70, fontFamily: 'monospace', fontSize: 11, height: 1.4)),
+              children: const [
+                Text("YASIR (BARCO ORIENTAL)", style: TextStyle(color: Color(0xFF00FFB2), fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 12)),
+                SizedBox(height: 6),
+                Text("Puertos posibles tras el Server Save:\n• Carlin (Muelle sur)\n• Liberty Bay (Muelle este)\n• Ankrahmun (Muelle oeste)", style: TextStyle(color: Colors.white70, fontFamily: 'monospace', fontSize: 11, height: 1.4)),
               ],
             ),
           ),
@@ -1034,32 +1104,25 @@ class _WorldScreenState extends State<WorldScreen> with SingleTickerProviderStat
   }
 }
 
-// PINTOR DEL MINIMAPA ESTILO TIBIA (Cuadrículas, calles marrones y paredes de piedra)
 class TibiaMinimapPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final bgPaint = Paint()..color = const Color(0xFF141A12);
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
 
-    final roadPaint = Paint()..color = const Color(0xFF382D1C); // Calle de tierra/piedra
+    final roadPaint = Paint()..color = const Color(0xFF382D1C);
     canvas.drawRect(Rect.fromLTWH(40, 90, size.width - 80, 50), roadPaint);
     canvas.drawRect(Rect.fromLTWH(130, 40, 80, 140), roadPaint);
 
     final wallPaint = Paint()..color = const Color(0xFF5A5852)..strokeWidth = 3..style = PaintingStyle.stroke;
-    // Edificio de la taberna
     canvas.drawRect(Rect.fromLTWH(110, 60, 120, 80), wallPaint);
 
-    final roofPaint = Paint()..color = const Color(0xFF6B261D).withOpacity(0.5); // Techo rojizo clásico
+    final roofPaint = Paint()..color = const Color(0xFF6B261D).withOpacity(0.5);
     canvas.drawRect(Rect.fromLTWH(113, 63, 114, 74), roofPaint);
 
-    // Grid de coordenadas de mapa
     final gridPaint = Paint()..color = Colors.black26..strokeWidth = 1;
-    for (double i = 0; i < size.width; i += 20) {
-      canvas.drawLine(Offset(i, 0), Offset(i, size.height), gridPaint);
-    }
-    for (double i = 0; i < size.height; i += 20) {
-      canvas.drawLine(Offset(0, i), Offset(size.width, i), gridPaint);
-    }
+    for (double i = 0; i < size.width; i += 20) { canvas.drawLine(Offset(i, 0), Offset(i, size.height), gridPaint); }
+    for (double i = 0; i < size.height; i += 20) { canvas.drawLine(Offset(0, i), Offset(size.width, i), gridPaint); }
   }
 
   @override
@@ -1093,7 +1156,6 @@ class _EventsScreenState extends State<EventsScreen> {
     super.dispose();
   }
 
-  // Calcula la cuenta regresiva exacta en Días, Horas, Minutos y Segundos
   String getTimeRemaining(int targetDays, int targetHours) {
     final now = DateTime.now();
     var targetDate = DateTime(now.year, now.month, now.day + targetDays, targetHours, 0, 0);
@@ -1137,13 +1199,6 @@ class _EventsScreenState extends State<EventsScreen> {
             desc: "Reaparición acelerada de monstruos para completar el Bestiary.",
             color: const Color(0xFF00FFB2),
           ),
-          const SizedBox(height: 14),
-          _liveEventCard(
-            title: "🧙 BEWITCHED OFICIAL",
-            countdown: getTimeRemaining(28, 10),
-            desc: "Evento mundial del caldero y bonificación global de experiencia.",
-            color: Colors.purpleAccent,
-          ),
         ],
       ),
     );
@@ -1156,9 +1211,7 @@ class _EventsScreenState extends State<EventsScreen> {
         color: const Color(0xFF0D121F),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color.withOpacity(0.7), width: 1.3),
-        boxShadow: [
-          BoxShadow(color: color.withOpacity(0.12), blurRadius: 8, spreadRadius: 1)
-        ],
+        boxShadow: [BoxShadow(color: color.withOpacity(0.12), blurRadius: 8, spreadRadius: 1)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1172,10 +1225,7 @@ class _EventsScreenState extends State<EventsScreen> {
               children: [
                 const Icon(Icons.timer, color: Colors.white70, size: 16),
                 const SizedBox(width: 8),
-                Text(
-                  "⏳ Inicia en: $countdown",
-                  style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1),
-                ),
+                Text("⏳ Inicia en: $countdown", style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1)),
               ],
             ),
           ),
