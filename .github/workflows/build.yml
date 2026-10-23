@@ -1,0 +1,31 @@
+name: Build Tibia Tactical APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Generar Proyecto y Compilar
+        run: |
+          flutter create --org com.tactical.tibia --project-name tibia_radar app
+          cp main.dart app/lib/main.dart
+          cd app
+          flutter pub add http
+          flutter build apk --release
+
+      - name: Subir APK Terminado
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tibia-Radar-Ferobra-APK
+          path: app/build/app/outputs/flutter-apk/app-release.apk
