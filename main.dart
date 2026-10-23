@@ -12,6 +12,9 @@ void main() {
   runApp(const SpyFerobraApp());
 }
 
+// -------------------------------------------------------------
+// AUDIO MILITAR
+// -------------------------------------------------------------
 class TacticalAudio {
   static final AudioPlayer _player = AudioPlayer();
   static bool soundEnabled = true;
@@ -58,6 +61,9 @@ class TacticalAudio {
   }
 }
 
+// -------------------------------------------------------------
+// APP & ROOT
+// -------------------------------------------------------------
 class SpyFerobraApp extends StatelessWidget {
   const SpyFerobraApp({super.key});
 
@@ -68,48 +74,14 @@ class SpyFerobraApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0F1216),
+        scaffoldBackgroundColor: const Color(0xFF101317),
         primaryColor: const Color(0xFF00FFB2),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF0A0D12),
+          elevation: 0,
+        ),
       ),
-      home: const MainNavigationScreen(),
-    );
-  }
-}
-
-class MainNavigationScreen extends StatefulWidget {
-  const MainNavigationScreen({super.key});
-
-  @override
-  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
-}
-
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentIndex = 0;
-
-  final List<Widget> _pages = const [
-    RadarScreen(),
-    WorldScreen(),
-    EventsScreen(),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: _pages),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (idx) => setState(() => _currentIndex = idx),
-        backgroundColor: const Color(0xFF0A0D12),
-        selectedItemColor: const Color(0xFF00FFB2),
-        unselectedItemColor: Colors.white38,
-        selectedLabelStyle: const TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold),
-        unselectedLabelStyle: const TextStyle(fontFamily: 'monospace', fontSize: 10),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.radar), label: 'WAR HUD'),
-          BottomNavigationBarItem(icon: Icon(Icons.public), label: 'MUNDO & RASHID'),
-          BottomNavigationBarItem(icon: Icon(Icons.timer), label: 'EVENTOS'),
-        ],
-      ),
+      home: const MainDrawerScreen(),
     );
   }
 }
@@ -131,16 +103,137 @@ class TrackTarget {
 }
 
 // -------------------------------------------------------------
-// PESTAÑA 1: WAR HUD (DISEÑO TIBIA LIVE)
+// CONTENEDOR PRINCIPAL CON MENÚ LATERAL (DRAWER COMPLETO)
 // -------------------------------------------------------------
-class RadarScreen extends StatefulWidget {
-  const RadarScreen({super.key});
+class MainDrawerScreen extends StatefulWidget {
+  const MainDrawerScreen({super.key});
 
   @override
-  State<RadarScreen> createState() => _RadarScreenState();
+  State<MainDrawerScreen> createState() => _MainDrawerScreenState();
 }
 
-class _RadarScreenState extends State<RadarScreen> {
+class _MainDrawerScreenState extends State<MainDrawerScreen> {
+  int _selectedDrawerIndex = 0;
+
+  final List<Widget> _views = const [
+    HomeScreen(),
+    WorldsScreen(),
+    EventsScreen(),
+    PartyShareCalculatorScreen(),
+    BlessingsCalculatorScreen(),
+  ];
+
+  final List<String> _titles = const [
+    "Tibia Live // Spy Ferobra",
+    "Mundos de Tibia",
+    "Calendario de Eventos",
+    "Compartir Experiencia",
+    "Calculadora de Blessings",
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          _titles[_selectedDrawerIndex],
+          style: const TextStyle(fontFamily: 'monospace', fontSize: 14, fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(TacticalAudio.soundEnabled ? Icons.volume_up : Icons.volume_off, color: TacticalAudio.soundEnabled ? const Color(0xFF00FFB2) : Colors.grey),
+            onPressed: () => setState(() => TacticalAudio.soundEnabled = !TacticalAudio.soundEnabled),
+          ),
+        ],
+      ),
+      drawer: Drawer(
+        backgroundColor: const Color(0xFF13171F),
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF0A0D12), Color(0xFF192333)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(color: const Color(0xFF00FFB2).withOpacity(0.15), shape: BoxShape.circle),
+                        child: const Icon(Icons.security, color: Color(0xFF00FFB2), size: 28),
+                      ),
+                      const SizedBox(width: 10),
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("SPY FEROBRA", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                          Text("SISTEMA ILIMITADO // PRO FREE", style: TextStyle(color: Color(0xFF00FFB2), fontSize: 10, fontFamily: 'monospace')),
+                        ],
+                      )
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text("Vigilancia táctica 24/7 sin bloqueos", style: TextStyle(color: Colors.white54, fontSize: 11)),
+                ],
+              ),
+            ),
+            _drawerTile(0, Icons.home, "Inicio (Radar & HUD)"),
+            _drawerTile(1, Icons.public, "Mundos"),
+            _drawerTile(2, Icons.event_available, "Eventos"),
+            const Divider(color: Colors.white12),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: Text("HERRAMIENTAS TÁCTICAS", style: TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace')),
+            ),
+            _drawerTile(3, Icons.group_add, "Compartir Experiencia (Party)"),
+            _drawerTile(4, Icons.shield, "Blessings & Costos de Muerte"),
+          ],
+        ),
+      ),
+      body: _views[_selectedDrawerIndex],
+    );
+  }
+
+  Widget _drawerTile(int index, IconData icon, String title) {
+    final isSelected = _selectedDrawerIndex == index;
+    return ListTile(
+      leading: Icon(icon, color: isSelected ? const Color(0xFF00FFB2) : Colors.white60, size: 22),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: isSelected ? const Color(0xFF00FFB2) : Colors.white,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          fontSize: 13,
+        ),
+      ),
+      selected: isSelected,
+      onTap: () {
+        setState(() => _selectedDrawerIndex = index);
+        Navigator.pop(context);
+      },
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// PANTALLA 1: INICIO (HOME / RADAR / TIBIA LIVE COMPLETO)
+// -------------------------------------------------------------
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
   static const platform = MethodChannel('com.tactical.tibia/radar');
   List<TrackTarget> targets = [
     TrackTarget(name: 'Markinjr', type: 'amigo', world: 'Ferobra'),
@@ -153,26 +246,27 @@ class _RadarScreenState extends State<RadarScreen> {
   String selectedWorldInput = 'Ferobra';
   String currentFilter = 'TODOS';
 
-  int globalPlayersOnline = 15561;
+  int globalPlayersOnline = 15330;
   Map<String, dynamic> onlinePlayersData = {};
-  Map<String, Map<String, dynamic>> characterInfoCache = {};
-  Map<String, List<dynamic>> characterDeaths = {};
-  Map<String, bool> loadingDeaths = {};
+  Map<String, Map<String, dynamic>> characterFullData = {};
 
   Map<String, int> loginTimestamps = {};
   Map<String, int> logoutTimestamps = {};
 
   Map<String, bool> muteLoginMap = {};
   Map<String, bool> muteLogoutMap = {};
+  Map<String, String> characterNotes = {};
+
+  String boostedCreatureName = "Rustheap Golem";
+  String boostedCreatureImg = "";
+  String boostedBossName = "The Diamond Blossom";
+  String boostedBossImg = "";
 
   List<String> radarLogs = [];
   bool isScanning = false;
   bool isBackgroundActive = true;
   Timer? _timer;
   Timer? _clockUpdater;
-
-  bool isSelectionMode = false;
-  final Set<String> selectedTargets = {};
 
   @override
   void initState() {
@@ -197,6 +291,7 @@ class _RadarScreenState extends State<RadarScreen> {
       final key = t.name.toLowerCase();
       muteLoginMap[key] = prefs.getBool('mute_login_$key') ?? false;
       muteLogoutMap[key] = prefs.getBool('mute_logout_$key') ?? false;
+      characterNotes[key] = prefs.getString('note_$key') ?? '';
 
       final savedLogout = prefs.getInt('logout_ts_$key');
       if (savedLogout != null) {
@@ -206,8 +301,7 @@ class _RadarScreenState extends State<RadarScreen> {
     }
 
     fetchGlobalPlayersOnline();
-    setState(() {});
-    addLog("SPY FEROBRA & QUINTERA // EN LÍNEA");
+    fetchBoostedData();
     syncNativeService();
     scanAllWorlds();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -218,16 +312,38 @@ class _RadarScreenState extends State<RadarScreen> {
 
   Future<void> fetchGlobalPlayersOnline() async {
     try {
-      final res = await http.get(
-        Uri.parse('https://api.tibiadata.com/v4/worlds'),
-        headers: {'User-Agent': 'Mozilla/5.0 (Android; Mobile)'},
-      ).timeout(const Duration(seconds: 8));
-
+      final res = await http.get(Uri.parse('https://api.tibiadata.com/v4/worlds')).timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         final total = data['worlds']?['players_online'];
-        if (total != null && mounted) {
-          setState(() => globalPlayersOnline = total);
+        if (total != null && mounted) setState(() => globalPlayersOnline = total);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> fetchBoostedData() async {
+    try {
+      final resC = await http.get(Uri.parse('https://api.tibiadata.com/v4/creatures')).timeout(const Duration(seconds: 8));
+      if (resC.statusCode == 200) {
+        final b = json.decode(resC.body)['creatures']?['boosted'];
+        if (b != null && mounted) {
+          setState(() {
+            boostedCreatureName = b['name'] ?? 'Rustheap Golem';
+            boostedCreatureImg = b['image_url'] ?? '';
+          });
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final resB = await http.get(Uri.parse('https://api.tibiadata.com/v4/boostablebosses')).timeout(const Duration(seconds: 8));
+      if (resB.statusCode == 200) {
+        final b = json.decode(resB.body)['boostable_bosses']?['boosted'];
+        if (b != null && mounted) {
+          setState(() {
+            boostedBossName = b['name'] ?? 'The Diamond Blossom';
+            boostedBossImg = b['image_url'] ?? '';
+          });
         }
       }
     } catch (_) {}
@@ -260,48 +376,37 @@ class _RadarScreenState extends State<RadarScreen> {
         final data = json.decode(res.body);
         final ch = data['character']?['character'];
         final deaths = data['character']?['deaths'] ?? [];
+        final houses = data['character']?['houses'] ?? [];
+        final guild = data['character']?['guild'] ?? {};
+
         if (ch != null) {
           final lastLoginStr = ch['last_login'] ?? '';
           if (lastLoginStr.isNotEmpty && !logoutTimestamps.containsKey(key)) {
             try {
               final parsed = DateTime.parse(lastLoginStr).millisecondsSinceEpoch;
               logoutTimestamps[key] = parsed;
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setInt('logout_ts_$key', parsed);
             } catch (_) {}
           }
 
-          setState(() {
-            characterInfoCache[key] = {
-              'level': ch['level'] ?? 0,
-              'vocation': ch['vocation'] ?? 'None',
-              'last_login': lastLoginStr,
-            };
-            characterDeaths[key] = deaths;
-          });
+          if (mounted) {
+            setState(() {
+              characterFullData[key] = {
+                'raw': ch,
+                'deaths': deaths,
+                'houses': houses,
+                'guild': guild,
+                'level': ch['level'] ?? 0,
+                'vocation': ch['vocation'] ?? 'None',
+                'residence': ch['town'] ?? 'Thais',
+                'account_status': ch['account_status'] ?? 'Free Account',
+                'achievement_points': ch['achievement_points'] ?? 0,
+                'last_login': lastLoginStr,
+              };
+            });
+          }
         }
       }
     } catch (_) {}
-  }
-
-  Future<void> fetchDeaths(String charName) async {
-    final key = charName.toLowerCase();
-    setState(() => loadingDeaths[key] = true);
-    try {
-      final response = await http.get(
-        Uri.parse('https://api.tibiadata.com/v4/character/${Uri.encodeComponent(charName)}'),
-        headers: {'User-Agent': 'Mozilla/5.0 (Android; Mobile)'},
-      ).timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List deaths = data['character']?['deaths'] ?? [];
-        setState(() => characterDeaths[key] = deaths);
-      }
-    } catch (_) {
-    } finally {
-      setState(() => loadingDeaths[key] = false);
-    }
   }
 
   @override
@@ -312,15 +417,7 @@ class _RadarScreenState extends State<RadarScreen> {
     super.dispose();
   }
 
-  void addLog(String message) {
-    final time = DateTime.now().toIso8601String().substring(11, 19);
-    setState(() {
-      radarLogs.insert(0, "[$time] $message");
-      if (radarLogs.length > 25) radarLogs.removeLast();
-    });
-  }
-
-  List<TrackTarget> get dynamicFilteredTargets {
+  List<TrackTarget> get filteredTargets {
     var list = targets.where((t) {
       if (currentFilter == 'ENEMIGOS') return t.type == 'enemigo';
       if (currentFilter == 'AMIGOS') return t.type == 'amigo';
@@ -328,11 +425,9 @@ class _RadarScreenState extends State<RadarScreen> {
     }).toList();
 
     list.sort((a, b) {
-      final aOnline = onlinePlayersData.containsKey(a.name.toLowerCase()) ? 1 : 0;
-      final bOnline = onlinePlayersData.containsKey(b.name.toLowerCase()) ? 1 : 0;
-      if (aOnline != bOnline) {
-        return bOnline.compareTo(aOnline);
-      }
+      final aOn = onlinePlayersData.containsKey(a.name.toLowerCase()) ? 1 : 0;
+      final bOn = onlinePlayersData.containsKey(b.name.toLowerCase()) ? 1 : 0;
+      if (aOn != bOn) return bOn.compareTo(aOn);
       return a.name.compareTo(b.name);
     });
     return list;
@@ -368,7 +463,6 @@ class _RadarScreenState extends State<RadarScreen> {
               if (targetObj.type == 'enemigo' && muteLoginMap[name] != true) {
                 TacticalAudio.playThreeBeeps();
               }
-              addLog("⚠️ [ONLINE]: ${p['name']} conectó en $w");
             }
           }
         }
@@ -383,14 +477,15 @@ class _RadarScreenState extends State<RadarScreen> {
       if (onlinePlayersData.containsKey(name) && !newOnlineMap.containsKey(name)) {
         logoutTimestamps[name] = now;
         await prefs.setInt('logout_ts_$name', now);
-        addLog("🛑 [OFFLINE]: ${t.name.toUpperCase()} desconectó de ${t.world}");
       }
     }
 
-    setState(() {
-      onlinePlayersData = newOnlineMap;
-      isScanning = false;
-    });
+    if (mounted) {
+      setState(() {
+        onlinePlayersData = newOnlineMap;
+        isScanning = false;
+      });
+    }
   }
 
   void addTarget(String type) {
@@ -400,7 +495,6 @@ class _RadarScreenState extends State<RadarScreen> {
       setState(() => targets.add(newT));
       fetchCharacterDetails(text);
       syncNativeService();
-      addLog("Nuevo $type en $selectedWorldInput: ${text.toUpperCase()}");
       _nameController.clear();
       scanAllWorlds();
     }
@@ -409,94 +503,11 @@ class _RadarScreenState extends State<RadarScreen> {
   void removeTarget(String name) {
     setState(() {
       targets.removeWhere((t) => t.name.toLowerCase() == name.toLowerCase());
-      selectedTargets.remove(name.toLowerCase());
     });
     syncNativeService();
-    addLog("Removido: ${name.toUpperCase()}");
   }
 
-  void deleteSelectedTargets() {
-    final count = selectedTargets.length;
-    if (count == 0) return;
-
-    setState(() {
-      targets.removeWhere((t) => selectedTargets.contains(t.name.toLowerCase()));
-      selectedTargets.clear();
-      isSelectionMode = false;
-    });
-    syncNativeService();
-    addLog("Se eliminaron $count objetivos.");
-  }
-
-  void selectAllTargets() {
-    setState(() {
-      if (selectedTargets.length == targets.length) {
-        selectedTargets.clear();
-      } else {
-        selectedTargets.addAll(targets.map((t) => t.name.toLowerCase()));
-      }
-    });
-  }
-
-  void _showIndividualAlertConfig(TrackTarget target) {
-    final key = target.name.toLowerCase();
-    bool muteLogin = muteLoginMap[key] ?? false;
-    bool muteLogout = muteLogoutMap[key] ?? false;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: const Color(0xFF131822),
-          title: Text(
-            "${target.type.toUpperCase()}: ${target.name.toUpperCase()} (${target.world})",
-            style: TextStyle(color: target.type == 'amigo' ? const Color(0xFF00FFB2) : const Color(0xFFFF5252), fontFamily: 'monospace', fontSize: 13, fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SwitchListTile(
-                title: const Text("Avisar al Conectar", style: TextStyle(fontSize: 12, fontFamily: 'monospace')),
-                subtitle: Text("Voz anunciando conexión en ${target.world}", style: const TextStyle(fontSize: 10, color: Colors.white38)),
-                value: !muteLogin,
-                activeColor: const Color(0xFF00FFB2),
-                onChanged: (val) => setDialogState(() => muteLogin = !val),
-              ),
-              const Divider(color: Colors.white12),
-              SwitchListTile(
-                title: const Text("Avisar al Desconectar", style: TextStyle(fontSize: 12, fontFamily: 'monospace')),
-                subtitle: Text(target.type == 'enemigo' ? "Voz y sirena de 1s" : "Voz avisando desconexión", style: const TextStyle(fontSize: 10, color: Colors.white38)),
-                value: !muteLogout,
-                activeColor: const Color(0xFF00FFB2),
-                onChanged: (val) => setDialogState(() => muteLogout = !val),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(child: const Text("CANCELAR", style: TextStyle(color: Colors.grey)), onPressed: () => Navigator.pop(ctx)),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FFB2), foregroundColor: Colors.black),
-              onPressed: () async {
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setBool('mute_login_$key', muteLogin);
-                await prefs.setBool('mute_logout_$key', muteLogout);
-                setState(() {
-                  muteLoginMap[key] = muteLogin;
-                  muteLogoutMap[key] = muteLogout;
-                });
-                Navigator.pop(ctx);
-                addLog("Configuración guardada para ${target.name.toUpperCase()}");
-              },
-              child: const Text("GUARDAR"),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // SPRITE CAMINANDO EN ÁNGULO DIAGONAL AUTÉNTICO (TIBIA LIVE)
-  Widget _getOfficialVocationSprite(String? vocation, bool isOnline) {
+  Widget _getVocationWalkingSprite(String? vocation, bool isOnline) {
     final voc = (vocation ?? '').toLowerCase();
     String animUrl;
 
@@ -513,11 +524,11 @@ class _RadarScreenState extends State<RadarScreen> {
     }
 
     return Opacity(
-      opacity: isOnline ? 1.0 : 0.35,
+      opacity: isOnline ? 1.0 : 0.4,
       child: Image.network(
         animUrl,
-        width: 48,
-        height: 48,
+        width: 46,
+        height: 46,
         fit: BoxFit.contain,
         filterQuality: FilterQuality.none,
         errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white24, size: 36),
@@ -540,449 +551,900 @@ class _RadarScreenState extends State<RadarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final displayList = dynamicFilteredTargets;
+    final displayList = filteredTargets;
     final nowMs = DateTime.now().millisecondsSinceEpoch;
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0D12),
-        elevation: 0,
-        title: const Text(
-          "SPY FEROBRA // TACTICAL WAR",
-          style: TextStyle(fontFamily: 'monospace', fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1.0),
+    return ListView(
+      children: [
+        // 1. Ticker / Noticia superior
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          color: const Color(0xFF191F2B),
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("NOTICIA OFICIAL DE TIBIA", style: TextStyle(color: Color(0xFF00FFB2), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+              SizedBox(height: 2),
+              Text("New Optional and Open PvP Game Worlds", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              Text("Los servidores de prueba ya se encuentran disponibles para la comunidad.", style: TextStyle(color: Colors.white60, fontSize: 10)),
+            ],
+          ),
         ),
-        actions: [
-          IconButton(
-            icon: Icon(TacticalAudio.soundEnabled ? Icons.volume_up : Icons.volume_off, color: TacticalAudio.soundEnabled ? const Color(0xFF00FFB2) : Colors.grey),
-            onPressed: () => setState(() => TacticalAudio.soundEnabled = !TacticalAudio.soundEnabled),
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Color(0xFF00FFB2)),
-            onPressed: isScanning ? null : scanAllWorlds,
-          )
-        ],
-      ),
-      body: Column(
-        children: [
-          // -------------------------------------------------------------
-          // CABECERA SUPERIOR: JUGADORES ONLINE CON GRÁFICA TIBIA LIVE
-          // -------------------------------------------------------------
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            color: const Color(0xFF0F1318),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Jugadores online",
-                      style: TextStyle(color: Colors.white60, fontSize: 11, fontFamily: 'monospace'),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      globalPlayersOnline.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},'),
-                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
-                    ),
-                  ],
-                ),
-                // Sparkline estilizado
-                SizedBox(
-                  width: 140,
-                  height: 32,
-                  child: CustomPaint(
-                    painter: SparklinePainter(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: Colors.white12),
 
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-            child: Column(
-              children: [
-                // Panel de Segundo Plano
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF141922),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: isBackgroundActive ? const Color(0xFF00FFB2).withOpacity(0.5) : Colors.redAccent.withOpacity(0.5)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(isBackgroundActive ? Icons.security : Icons.security_update_warning, color: isBackgroundActive ? const Color(0xFF00FFB2) : Colors.redAccent, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          isBackgroundActive ? "VIGILANCIA 24/7 EN SEGUNDO PLANO: ACTIVA" : "SEGUNDO PLANO: DESACTIVADO",
-                          style: TextStyle(fontFamily: 'monospace', fontSize: 10, fontWeight: FontWeight.bold, color: isBackgroundActive ? const Color(0xFF00FFB2) : Colors.redAccent),
-                        ),
-                      ),
-                      Switch(
-                        value: isBackgroundActive,
-                        activeColor: const Color(0xFF00FFB2),
-                        onChanged: (val) {
-                          setState(() => isBackgroundActive = val);
-                          syncNativeService();
-                        },
-                      )
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                // Formulario Agregar
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: const Color(0xFF141922), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white10)),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _nameController,
-                              style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
-                              decoration: const InputDecoration(hintText: "Nombre del personaje...", hintStyle: TextStyle(color: Colors.white30, fontSize: 12), border: InputBorder.none),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            decoration: BoxDecoration(color: const Color(0xFF1E2532), borderRadius: BorderRadius.circular(4)),
-                            child: DropdownButton<String>(
-                              value: selectedWorldInput,
-                              dropdownColor: const Color(0xFF141922),
-                              underline: const SizedBox(),
-                              style: const TextStyle(color: Color(0xFF00FFB2), fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold),
-                              items: ['Ferobra', 'Quintera'].map((w) => DropdownMenuItem(value: w, child: Text(w))).toList(),
-                              onChanged: (val) {
-                                if (val != null) setState(() => selectedWorldInput = val);
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FFB2), foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 8)),
-                              onPressed: () => addTarget('amigo'),
-                              child: const Text("🛡️ + AMIGO", style: TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF5252), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 8)),
-                              onPressed: () => addTarget('enemigo'),
-                              child: const Text("⚔️ + ENEMIGO", style: TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
-                            ),
-                          ),
-                        ],
-                      )
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                // Filtros
-                Row(
-                  children: [
-                    _filterBtn('TODOS'),
-                    const SizedBox(width: 6),
-                    _filterBtn('ENEMIGOS'),
-                    const SizedBox(width: 6),
-                    _filterBtn('AMIGOS'),
-                    const Spacer(),
-                    IconButton(
-                      icon: Icon(isSelectionMode ? Icons.close : Icons.checklist, size: 20, color: const Color(0xFF00FFB2)),
-                      onPressed: () {
-                        setState(() {
-                          isSelectionMode = !isSelectionMode;
-                          selectedTargets.clear();
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          if (isSelectionMode)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        // 2. Jugadores Online + Gráfica Tibia Live
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          color: const Color(0xFF0F1318),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextButton(
-                    onPressed: selectAllTargets,
-                    child: Text(selectedTargets.length == targets.length ? "DESMARCAR" : "TODOS (${targets.length})", style: const TextStyle(color: Colors.amber, fontFamily: 'monospace', fontSize: 11)),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF5252), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4)),
-                    onPressed: selectedTargets.isEmpty ? null : deleteSelectedTargets,
-                    child: Text("BORRAR (${selectedTargets.length})", style: const TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
+                  const Text("Jugadores online", style: TextStyle(color: Colors.white60, fontSize: 11, fontFamily: 'monospace')),
+                  const SizedBox(height: 2),
+                  Text(
+                    globalPlayersOnline.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},'),
+                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
                   ),
                 ],
               ),
-            ),
+              SizedBox(
+                width: 140,
+                height: 32,
+                child: CustomPaint(painter: SparklinePainter()),
+              ),
+            ],
+          ),
+        ),
 
-          // -------------------------------------------------------------
-          // TARJETAS AL ESTILO EXACTO DE TIBIA LIVE (LÍNEA INFERIOR VERDE/ROJA)
-          // -------------------------------------------------------------
-          Expanded(
-            flex: 5,
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              itemCount: displayList.length,
-              itemBuilder: (context, index) {
-                final target = displayList[index];
-                final key = target.name.toLowerCase();
-                final isOnline = onlinePlayersData.containsKey(key);
-                final onlineData = onlinePlayersData[key];
-                final cachedInfo = characterInfoCache[key] ?? {};
-                final deaths = characterDeaths[key] ?? [];
-                final isChecked = selectedTargets.contains(key);
-
-                final level = isOnline ? (onlineData['level'] ?? 0) : (cachedInfo['level'] ?? 0);
-                final vocation = isOnline ? (onlineData['vocation'] ?? '') : (cachedInfo['vocation'] ?? 'Consultando...');
-
-                String timerText = "";
-                if (isOnline) {
-                  if (loginTimestamps.containsKey(key)) {
-                    final diff = nowMs - loginTimestamps[key]!;
-                    timerText = "En línea: ${formatElapsedTime(diff)}";
-                  } else {
-                    timerText = "En línea";
-                  }
-                } else {
-                  if (logoutTimestamps.containsKey(key)) {
-                    final diff = nowMs - logoutTimestamps[key]!;
-                    timerText = "Offline hace: ${formatElapsedTime(diff)}";
-                  } else {
-                    timerText = "Desconectado";
-                  }
-                }
-
-                // Línea inferior estilo Tibia Live: Verde si online/amigo, Roja si enemigo/hunted
-                final bottomLineColor = target.type == 'enemigo'
-                    ? const Color(0xFFFF5252)
-                    : (isOnline ? const Color(0xFF4CAF50) : const Color(0xFF2C3848));
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF151921),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border(
-                      bottom: BorderSide(color: bottomLineColor, width: 3.5),
-                    ),
-                  ),
-                  child: Theme(
-                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                    child: ExpansionTile(
-                      onExpansionChanged: (expanded) {
-                        if (expanded && deaths.isEmpty) {
-                          fetchDeaths(target.name);
-                        }
-                      },
-                      leading: isSelectionMode
-                          ? Checkbox(
-                              activeColor: const Color(0xFF00FFB2),
-                              checkColor: Colors.black,
-                              value: isChecked,
-                              onChanged: (val) {
-                                setState(() {
-                                  if (val == true) {
-                                    selectedTargets.add(key);
-                                  } else {
-                                    selectedTargets.remove(key);
-                                  }
-                                });
-                              },
-                            )
-                          : _getOfficialVocationSprite(vocation, isOnline),
-                      title: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              target.name,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: isOnline ? Colors.white : Colors.white70,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            target.world,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 2),
-                          Text(
-                            "Nivel $level – $vocation",
-                            style: const TextStyle(color: Colors.white60, fontSize: 12),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            timerText,
-                            style: TextStyle(
-                              color: isOnline ? const Color(0xFF00FFB2) : Colors.white38,
-                              fontSize: 10,
-                              fontFamily: 'monospace',
-                            ),
-                          ),
-                        ],
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.settings, color: Colors.white38, size: 18),
-                            onPressed: () => _showIndividualAlertConfig(target),
-                          ),
-                          if (!isSelectionMode)
-                            IconButton(
-                              icon: const Icon(Icons.close, color: Colors.redAccent, size: 16),
-                              onPressed: () => removeTarget(target.name),
-                            ),
-                        ],
-                      ),
-                      // Historial de muertes
+        // 3. Panel de agregar personaje
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: const Color(0xFF151A22), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white10)),
+                child: Column(
+                  children: [
+                    Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          color: const Color(0xFF0C1016),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text("💀 HISTORIAL DE MUERTES", style: TextStyle(color: Color(0xFFFF5252), fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
-                                  if (loadingDeaths[key] == true)
-                                    const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF5252))),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              if (deaths.isEmpty && loadingDeaths[key] != true)
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 4),
-                                  child: Text("Sin muertes recientes registradas en la web.", style: TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace')),
-                                )
-                              else
-                                ...deaths.take(3).map((d) {
-                                  final killers = (d['killers'] as List? ?? []);
-                                  String killerName = "Criatura desconocida";
-                                  bool isPk = false;
-                                  if (killers.isNotEmpty) {
-                                    killerName = killers.first['name'] ?? 'Desconocido';
-                                    isPk = killers.first['player'] == true;
-                                  }
-                                  final dateStr = (d['time'] ?? '').toString().replaceFirst('T', ' ').replaceAll('Z', '');
-
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 6),
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF151A24),
-                                      borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(color: isPk ? Colors.redAccent.withOpacity(0.5) : Colors.white10),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(isPk ? Icons.sports_kabaddi : Icons.dangerous, color: isPk ? Colors.redAccent : Colors.orangeAccent, size: 16),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                "Lvl ${d['level']} por: ${killerName.toUpperCase()}",
-                                                style: TextStyle(color: isPk ? const Color(0xFFFF6B6B) : Colors.white, fontFamily: 'monospace', fontSize: 10, fontWeight: FontWeight.bold),
-                                              ),
-                                              Text(
-                                                dateStr,
-                                                style: const TextStyle(color: Colors.white38, fontSize: 9, fontFamily: 'monospace'),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        if (isPk)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                            decoration: BoxDecoration(color: Colors.red.withOpacity(0.2), borderRadius: BorderRadius.circular(3)),
-                                            child: const Text("PK", style: TextStyle(color: Colors.redAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-                                          )
-                                      ],
-                                    ),
-                                  );
-                                }),
-                            ],
+                        Expanded(
+                          child: TextField(
+                            controller: _nameController,
+                            style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
+                            decoration: const InputDecoration(hintText: "Rastrear personaje...", hintStyle: TextStyle(color: Colors.white30, fontSize: 12), border: InputBorder.none),
                           ),
-                        )
+                        ),
+                        DropdownButton<String>(
+                          value: selectedWorldInput,
+                          dropdownColor: const Color(0xFF151A22),
+                          underline: const SizedBox(),
+                          style: const TextStyle(color: Color(0xFF00FFB2), fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold),
+                          items: ['Ferobra', 'Quintera', 'Antica'].map((w) => DropdownMenuItem(value: w, child: Text(w))).toList(),
+                          onChanged: (val) {
+                            if (val != null) setState(() => selectedWorldInput = val);
+                          },
+                        ),
                       ],
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FFB2), foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 6)),
+                            onPressed: () => addTarget('amigo'),
+                            child: const Text("🛡️ + AMIGO", style: TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF5252), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 6)),
+                            onPressed: () => addTarget('enemigo'),
+                            child: const Text("⚔️ + ENEMIGO", style: TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    )
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // Contador de capacidad ilimitada (Sin restricciones Pro)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("RASTREANDO (${targets.length}) // SIN LÍMITES", style: const TextStyle(color: Color(0xFF00FFB2), fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      _filterTab('TODOS'),
+                      const SizedBox(width: 4),
+                      _filterTab('ENEMIGOS'),
+                      const SizedBox(width: 4),
+                      _filterTab('AMIGOS'),
+                    ],
+                  )
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        // 4. Lista de Personajes (Al tocar abre Información del Personaje)
+        ...displayList.map((target) {
+          final key = target.name.toLowerCase();
+          final isOnline = onlinePlayersData.containsKey(key);
+          final full = characterFullData[key] ?? {};
+          final level = isOnline ? (onlinePlayersData[key]['level'] ?? 0) : (full['level'] ?? 0);
+          final vocation = isOnline ? (onlinePlayersData[key]['vocation'] ?? '') : (full['vocation'] ?? 'Cargando...');
+
+          String timerText = "";
+          if (isOnline) {
+            final diff = nowMs - (loginTimestamps[key] ?? nowMs);
+            timerText = "En línea: ${formatElapsedTime(diff)}";
+          } else {
+            final diff = nowMs - (logoutTimestamps[key] ?? nowMs);
+            timerText = "Offline hace: ${formatElapsedTime(diff)}";
+          }
+
+          final bottomLineColor = target.type == 'enemigo'
+              ? const Color(0xFFFF5252)
+              : (isOnline ? const Color(0xFF4CAF50) : const Color(0xFF2C3848));
+
+          return Container(
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF151921),
+              borderRadius: BorderRadius.circular(4),
+              border: Border(bottom: BorderSide(color: bottomLineColor, width: 3.5)),
+            ),
+            child: ListTile(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CharacterDetailScreen(
+                      target: target,
+                      fullData: full,
+                      isOnline: isOnline,
+                      onlineData: onlinePlayersData[key],
                     ),
                   ),
                 );
               },
+              leading: _getVocationWalkingSprite(vocation, isOnline),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(target.name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isOnline ? Colors.white : Colors.white70)),
+                  ),
+                  Text(target.world, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                ],
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Nivel $level – $vocation", style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                  Text(timerText, style: TextStyle(color: isOnline ? const Color(0xFF00FFB2) : Colors.white38, fontSize: 10, fontFamily: 'monospace')),
+                ],
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white30, size: 16),
+                onPressed: () => removeTarget(target.name),
+              ),
             ),
-          ),
+          );
+        }),
 
-          // Consola militar pequeña
-          Container(
-            height: 65,
-            width: double.infinity,
-            padding: const EdgeInsets.all(6),
-            color: const Color(0xFF080A0E),
-            child: ListView.builder(
-              itemCount: radarLogs.length,
-              itemBuilder: (context, index) {
-                return Text(radarLogs[index], style: const TextStyle(fontFamily: 'monospace', fontSize: 9, color: Color(0xFF80DEEA)));
-              },
-            ),
+        const SizedBox(height: 12),
+
+        // 5. Bloques Boosted Creature & Boss
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white10)),
+                  child: Column(
+                    children: [
+                      const Text("Boosted Creature", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        height: 48,
+                        child: boostedCreatureImg.isNotEmpty
+                            ? Image.network(boostedCreatureImg, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.pest_control, color: Colors.white24))
+                            : const Icon(Icons.pest_control, color: Colors.white24),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(boostedCreatureName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white10)),
+                  child: Column(
+                    children: [
+                      const Text("Boosted Boss", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        height: 48,
+                        child: boostedBossImg.isNotEmpty
+                            ? Image.network(boostedBossImg, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.shield, color: Colors.white24))
+                            : const Icon(Icons.shield, color: Colors.white24),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(boostedBossName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+
+        const SizedBox(height: 14),
+
+        // 6. Tarjeta Rashid
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white12)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                color: const Color(0xFF0D1016),
+                child: const Text("Todos los mundos", style: TextStyle(color: Colors.white70, fontSize: 12)),
+              ),
+              Container(
+                height: 110,
+                width: double.infinity,
+                color: const Color(0xFF4A3E20),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      left: 14,
+                      top: 14,
+                      child: Container(
+                        width: 120,
+                        height: 80,
+                        decoration: BoxDecoration(color: const Color(0xFFD2B57B), border: Border.all(color: Colors.black45)),
+                        child: CustomPaint(painter: MinimapHousesPainter()),
+                      ),
+                    ),
+                    Positioned(
+                      right: 35,
+                      top: 20,
+                      child: Image.network(
+                        "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=146&addons=0&head=78&body=106&legs=58&feet=76&direction=3",
+                        width: 58,
+                        height: 58,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Text("🚶", style: TextStyle(fontSize: 28)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                color: const Color(0xFF1E2634),
+                child: const Text("Rashid esta en Darashia", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
     );
   }
 
-  Widget _filterBtn(String label) {
+  Widget _filterTab(String label) {
     final isSelected = currentFilter == label;
     return GestureDetector(
       onTap: () => setState(() => currentFilter = label),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF00FFB2) : const Color(0xFF141922),
-          borderRadius: BorderRadius.circular(4),
+          color: isSelected ? const Color(0xFF00FFB2) : const Color(0xFF151921),
+          borderRadius: BorderRadius.circular(3),
         ),
         child: Text(
           label,
-          style: TextStyle(fontFamily: 'monospace', fontSize: 10, fontWeight: FontWeight.bold, color: isSelected ? Colors.black : Colors.white60),
+          style: TextStyle(fontFamily: 'monospace', fontSize: 9, fontWeight: FontWeight.bold, color: isSelected ? Colors.black : Colors.white60),
         ),
       ),
     );
   }
 }
 
-// Pintor de gráfica de tendencia en verde neón (Tibia Live style)
+// -------------------------------------------------------------
+// PANTALLA DE DETALLE COMPLETO (INFORMACIÓN DEL PERSONAJE)
+// -------------------------------------------------------------
+class CharacterDetailScreen extends StatefulWidget {
+  final TrackTarget target;
+  final Map<String, dynamic> fullData;
+  final bool isOnline;
+  final dynamic onlineData;
+
+  const CharacterDetailScreen({
+    super.key,
+    required this.target,
+    required this.fullData,
+    required this.isOnline,
+    this.onlineData,
+  });
+
+  @override
+  State<CharacterDetailScreen> createState() => _CharacterDetailScreenState();
+}
+
+class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
+  String note = "";
+
+  @override
+  void initState() {
+    super.initState();
+    loadNote();
+  }
+
+  Future<void> loadNote() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      note = prefs.getString('note_${widget.target.name.toLowerCase()}') ?? '';
+    });
+  }
+
+  void editNoteDialog() {
+    final controller = TextEditingController(text: note);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF151A24),
+        title: Text("Nota para ${widget.target.name}", style: const TextStyle(color: Color(0xFF00FFB2), fontSize: 14)),
+        content: TextField(
+          controller: controller,
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+          decoration: const InputDecoration(hintText: "Ej: Caza en Asuras a las 20:00...", hintStyle: TextStyle(color: Colors.white30)),
+        ),
+        actions: [
+          TextButton(child: const Text("CANCELAR", style: TextStyle(color: Colors.grey)), onPressed: () => Navigator.pop(ctx)),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FFB2), foregroundColor: Colors.black),
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('note_${widget.target.name.toLowerCase()}', controller.text);
+              setState(() => note = controller.text);
+              Navigator.pop(ctx);
+            },
+            child: const Text("ACEPTAR"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void notificationsConfigDialog() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = widget.target.name.toLowerCase();
+    bool notifLogin = prefs.getBool('mute_login_$key') != true;
+    bool notifLogout = prefs.getBool('mute_logout_$key') != true;
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF151A24),
+          title: Text("Notificaciones para ${widget.target.name}", style: const TextStyle(color: Color(0xFF00FFB2), fontSize: 13, fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SwitchListTile(
+                title: const Text("Notificaciones de login", style: TextStyle(fontSize: 12)),
+                value: notifLogin,
+                activeColor: const Color(0xFF00FFB2),
+                onChanged: (val) => setDialogState(() => notifLogin = val),
+              ),
+              SwitchListTile(
+                title: const Text("Notificaciones de logout", style: TextStyle(fontSize: 12)),
+                value: notifLogout,
+                activeColor: const Color(0xFF00FFB2),
+                onChanged: (val) => setDialogState(() => notifLogout = val),
+              ),
+              const ListTile(
+                title: Text("Notificaciones de subida de nivel", style: TextStyle(fontSize: 12)),
+                trailing: Icon(Icons.check_circle, color: Color(0xFF00FFB2), size: 20),
+                subtitle: Text("Desbloqueado PRO", style: TextStyle(fontSize: 10, color: Color(0xFF00FFB2))),
+              ),
+              const ListTile(
+                title: Text("Notificaciones de muerte", style: TextStyle(fontSize: 12)),
+                trailing: Icon(Icons.check_circle, color: Color(0xFF00FFB2), size: 20),
+                subtitle: Text("Desbloqueado PRO", style: TextStyle(fontSize: 10, color: Color(0xFF00FFB2))),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FFB2), foregroundColor: Colors.black),
+              onPressed: () async {
+                await prefs.setBool('mute_login_$key', !notifLogin);
+                await prefs.setBool('mute_logout_$key', !notifLogout);
+                Navigator.pop(ctx);
+              },
+              child: const Text("GUARDAR"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final raw = widget.fullData['raw'] ?? {};
+    final level = widget.isOnline ? (widget.onlineData?['level'] ?? widget.fullData['level'] ?? 0) : (widget.fullData['level'] ?? 0);
+    final vocation = widget.isOnline ? (widget.onlineData?['vocation'] ?? widget.fullData['vocation'] ?? '') : (widget.fullData['vocation'] ?? '');
+    final residence = raw['town'] ?? 'Thais';
+    final accountStatus = raw['account_status'] ?? 'Premium';
+    final deaths = (widget.fullData['deaths'] as List? ?? []);
+    final houses = (widget.fullData['houses'] as List? ?? []);
+    final guild = (widget.fullData['guild'] as Map? ?? {});
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Información del personaje", style: TextStyle(fontSize: 14)),
+        actions: [
+          IconButton(icon: const Icon(Icons.notifications), onPressed: notificationsConfigDialog),
+          PopupMenuButton<String>(
+            color: const Color(0xFF151A24),
+            onSelected: (val) {
+              if (val == 'note') editNoteDialog();
+              if (val == 'share') {
+                Clipboard.setData(ClipboardData(text: "https://www.tibia.com/community/?subtopic=characters&name=${widget.target.name}"));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Enlace oficial copiado al portapapeles")));
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'note', child: Text("Editar nota")),
+              const PopupMenuItem(value: 'share', child: Text("Compartir enlace")),
+            ],
+          )
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          // Cabecera idéntica a Tibia Live
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(4)),
+            child: Row(
+              children: [
+                Image.network(
+                  "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=131&addons=3&direction=3",
+                  width: 50,
+                  height: 50,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Icon(Icons.person, size: 40),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.target.name, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+                      Text("Nivel $level – $vocation", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      if (guild['name'] != null)
+                        Text("${guild['rank'] ?? 'Member'} de ${guild['name']}", style: const TextStyle(color: Color(0xFF00FFB2), fontSize: 11)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Mini mapa de residencia
+          Container(
+            height: 140,
+            width: double.infinity,
+            decoration: BoxDecoration(color: const Color(0xFF192A44), borderRadius: BorderRadius.circular(4)),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Opacity(
+                    opacity: 0.35,
+                    child: Image.network("https://tibiamaps.github.io/tibia-map-data/floor-07-map.png", fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox()),
+                  ),
+                ),
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.location_city, color: Color(0xFF00FFB2), size: 30),
+                      const SizedBox(height: 4),
+                      Text("Residencia: $residence".toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 1.2)),
+                    ],
+                  ),
+                )
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Rejilla de Información
+          Row(
+            children: [
+              _infoTile("Residencia", residence),
+              const SizedBox(width: 8),
+              _infoTile("Mundo", widget.target.world),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _infoTile("Estado de cuenta", accountStatus),
+              const SizedBox(width: 8),
+              _infoTile("Estado", widget.isOnline ? "Online" : "Desconectado", isOnlineColor: widget.isOnline),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Nota
+          if (note.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: const Color(0xFF151E2D), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFF00FFB2).withOpacity(0.4))),
+              child: Row(
+                children: [
+                  const Icon(Icons.note_alt, color: Color(0xFF00FFB2), size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text("Nota: $note", style: const TextStyle(color: Colors.white, fontSize: 12))),
+                ],
+              ),
+            ),
+          const SizedBox(height: 10),
+
+          // Casas
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(4)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Casas", style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                if (houses.isEmpty)
+                  const Text("Sin casas", style: TextStyle(color: Colors.white38, fontSize: 12))
+                else
+                  ...houses.map((h) => Text("🏠 ${h['name']} (${h['town']}) – ${h['rent']} gp/mes", style: const TextStyle(color: Colors.white, fontSize: 12))),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Muertes con PK atacantes
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(4)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Muertes", style: TextStyle(color: Color(0xFFFF5252), fontSize: 14, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                if (deaths.isEmpty)
+                  const Text("Sin muertes recientes", style: TextStyle(color: Colors.white38, fontSize: 12))
+                else
+                  ...deaths.map((d) {
+                    final killers = (d['killers'] as List? ?? []);
+                    final dateStr = (d['time'] ?? '').toString().replaceFirst('T', ' ').replaceAll('Z', '');
+                    final isPkMass = killers.length > 1;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: const Color(0xFF0E121A), borderRadius: BorderRadius.circular(4)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text("${d['level']} NIVEL", style: const TextStyle(color: Color(0xFFFF5252), fontWeight: FontWeight.bold, fontSize: 13)),
+                              Text(dateStr, style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            isPkMass ? "Muerto por: ${killers.length} jugadores" : "Muerto por: ${killers.isNotEmpty ? killers.first['name'] : 'Criatura'}",
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                          ),
+                          if (isPkMass) ...[
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: killers.map((k) {
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(3)),
+                                  child: Text("⚔️ ${k['name']}", style: const TextStyle(color: Color(0xFFFF8A80), fontSize: 10)),
+                                );
+                              }).toList(),
+                            )
+                          ]
+                        ],
+                      ),
+                    );
+                  }),
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _infoTile(String label, String value, {bool isOnlineColor = false}) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(4)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(value, style: TextStyle(color: isOnlineColor ? const Color(0xFF00FFB2) : Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// PANTALLA: MUNDOS
+// -------------------------------------------------------------
+class WorldsScreen extends StatefulWidget {
+  const WorldsScreen({super.key});
+
+  @override
+  State<WorldsScreen> createState() => _WorldsScreenState();
+}
+
+class _WorldsScreenState extends State<WorldsScreen> {
+  List<dynamic> worlds = [];
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchWorlds();
+  }
+
+  Future<void> fetchWorlds() async {
+    try {
+      final res = await http.get(Uri.parse('https://api.tibiadata.com/v4/worlds')).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        setState(() {
+          worlds = data['worlds']?['regular_worlds'] ?? [];
+          loading = false;
+        });
+      }
+    } catch (_) {
+      setState(() => loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) return const Center(child: CircularProgressIndicator(color: Color(0xFF00FFB2)));
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(10),
+      itemCount: worlds.length,
+      itemBuilder: (_, idx) {
+        final w = worlds[idx];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(4)),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(w['name'], style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                  Text("${w['pvp_type']} – ${w['location']}", style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                ],
+              ),
+              Text("${w['players_online']} online", style: const TextStyle(color: Color(0xFF00FFB2), fontWeight: FontWeight.bold, fontSize: 12, fontFamily: 'monospace')),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// PANTALLA: COMPARTIR EXPERIENCIA (PARTY SHARE CALCULATOR)
+// -------------------------------------------------------------
+class PartyShareCalculatorScreen extends StatefulWidget {
+  const PartyShareCalculatorScreen({super.key});
+
+  @override
+  State<PartyShareCalculatorScreen> createState() => _PartyShareCalculatorScreenState();
+}
+
+class _PartyShareCalculatorScreenState extends State<PartyShareCalculatorScreen> {
+  final TextEditingController _levelCtrl = TextEditingController(text: "500");
+  int minLvl = 333;
+  int maxLvl = 750;
+
+  void calculate() {
+    final lvl = int.tryParse(_levelCtrl.text) ?? 1;
+    setState(() {
+      minLvl = (lvl * 2 / 3).floor();
+      maxLvl = (lvl * 3 / 2).ceil();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _levelCtrl,
+            keyboardType: TextInputType.number,
+            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+            decoration: const InputDecoration(labelText: "Tu Nivel de Personaje", labelStyle: TextStyle(color: Color(0xFF00FFB2))),
+            onChanged: (_) => calculate(),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(6)),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                Column(
+                  children: [
+                    Text("$minLvl", style: const TextStyle(color: Color(0xFF00FFB2), fontSize: 26, fontWeight: FontWeight.bold)),
+                    const Text("Nivel Mínimo", style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  ],
+                ),
+                Container(width: 1, height: 40, color: Colors.white12),
+                Column(
+                  children: [
+                    Text("$maxLvl", style: const TextStyle(color: Color(0xFF00FFB2), fontSize: 26, fontWeight: FontWeight.bold)),
+                    const Text("Nivel Máximo", style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  ],
+                ),
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// PANTALLA: CALCULADORA DE BLESSINGS
+// -------------------------------------------------------------
+class BlessingsCalculatorScreen extends StatefulWidget {
+  const BlessingsCalculatorScreen({super.key});
+
+  @override
+  State<BlessingsCalculatorScreen> createState() => _BlessingsCalculatorScreenState();
+}
+
+class _BlessingsCalculatorScreenState extends State<BlessingsCalculatorScreen> {
+  final TextEditingController _levelCtrl = TextEditingController(text: "300");
+  bool promoted = true;
+
+  int calculateTotalBless(int lvl) {
+    int regularCost = 20000;
+    if (lvl <= 30) {
+      regularCost = 2000;
+    } else if (lvl < 120) {
+      regularCost = 2000 + (lvl - 30) * 200;
+    }
+    return regularCost * 7;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lvl = int.tryParse(_levelCtrl.text) ?? 100;
+    final totalGold = calculateTotalBless(lvl);
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        TextField(
+          controller: _levelCtrl,
+          keyboardType: TextInputType.number,
+          style: const TextStyle(color: Colors.white, fontSize: 16),
+          decoration: const InputDecoration(labelText: "Nivel del Personaje", labelStyle: TextStyle(color: Color(0xFF00FFB2))),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(6)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Costo total de 7 Blessings: $totalGold gp", style: const TextStyle(color: Color(0xFF00FFB2), fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              const Text("Bendición Twist of Fate (PvP): 50,000 gp", style: TextStyle(color: Colors.white70, fontSize: 12)),
+              const Divider(color: Colors.white12),
+              const Text("Protección de Equipo: 100% garantizado con 5+ blessings", style: TextStyle(color: Colors.white54, fontSize: 11)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// PANTALLA: EVENTOS
+// -------------------------------------------------------------
+class EventsScreen extends StatelessWidget {
+  const EventsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(14),
+      children: [
+        _eventItem("Annual Autumn Vintage", "En curso – Finaliza en 8 horas", Colors.amber),
+        _eventItem("Halloween Event", "31 octubre – 3 noviembre", const Color(0xFF00FFB2)),
+        _eventItem("The Lightbearer", "11 noviembre – 15 noviembre", Colors.orangeAccent),
+        _eventItem("Full Moon", "12 noviembre – 15 noviembre", const Color(0xFF00E5FF)),
+        _eventItem("Double XP & Skill", "Doble avance en cacería y dummy", Colors.purpleAccent),
+      ],
+    );
+  }
+
+  Widget _eventItem(String title, String dates, Color col) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(4), border: Border(left: BorderSide(color: col, width: 3))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(color: col, fontWeight: FontWeight.bold, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text(dates, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+}
+
+// Sparkline
 class SparklinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -993,12 +1455,7 @@ class SparklinePainter extends CustomPainter {
 
     final path = Path();
     path.moveTo(0, size.height * 0.4);
-    path.cubicTo(
-      size.width * 0.35, size.height * 0.1,
-      size.width * 0.65, size.height * 0.9,
-      size.width, size.height * 0.6,
-    );
-
+    path.cubicTo(size.width * 0.35, size.height * 0.1, size.width * 0.65, size.height * 0.9, size.width, size.height * 0.6);
     canvas.drawPath(path, paint);
   }
 
@@ -1006,324 +1463,19 @@ class SparklinePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// -------------------------------------------------------------
-// PESTAÑA 2: MUNDO, RASHID Y BLOQUES BOOSTED CREATURE & BOSS
-// -------------------------------------------------------------
-class WorldScreen extends StatefulWidget {
-  const WorldScreen({super.key});
-
-  @override
-  State<WorldScreen> createState() => _WorldScreenState();
-}
-
-class _WorldScreenState extends State<WorldScreen> {
-  Timer? _clockTimer;
-  Duration timeToSS = Duration.zero;
-
-  String boostedCreatureName = "Cargando...";
-  String boostedCreatureImg = "";
-
-  String boostedBossName = "Cargando...";
-  String boostedBossImg = "";
-
-  @override
-  void initState() {
-    super.initState();
-    calculateTimeToSS();
-    fetchBoostedData();
-    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) => calculateTimeToSS());
-  }
-
-  @override
-  void dispose() {
-    _clockTimer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> fetchBoostedData() async {
-    // 1. Boosted Creature
-    try {
-      final resC = await http.get(
-        Uri.parse('https://api.tibiadata.com/v4/creatures'),
-        headers: {'User-Agent': 'Mozilla/5.0 (Android; Mobile)'},
-      ).timeout(const Duration(seconds: 8));
-
-      if (resC.statusCode == 200) {
-        final data = json.decode(resC.body);
-        final b = data['creatures']?['boosted'];
-        if (b != null && mounted) {
-          setState(() {
-            boostedCreatureName = b['name'] ?? 'Rustheap Golem';
-            boostedCreatureImg = b['image_url'] ?? '';
-          });
-        }
-      }
-    } catch (_) {}
-
-    // 2. Boosted Boss
-    try {
-      final resB = await http.get(
-        Uri.parse('https://api.tibiadata.com/v4/boostablebosses'),
-        headers: {'User-Agent': 'Mozilla/5.0 (Android; Mobile)'},
-      ).timeout(const Duration(seconds: 8));
-
-      if (resB.statusCode == 200) {
-        final data = json.decode(resB.body);
-        final b = data['boostable_bosses']?['boosted'];
-        if (b != null && mounted) {
-          setState(() {
-            boostedBossName = b['name'] ?? 'The Diamond Blossom';
-            boostedBossImg = b['image_url'] ?? '';
-          });
-        }
-      }
-    } catch (_) {}
-  }
-
-  void calculateTimeToSS() {
-    final nowUtc = DateTime.now().toUtc();
-    var nextSS = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day, 8, 0, 0);
-    if (nowUtc.isAfter(nextSS)) {
-      nextSS = nextSS.add(const Duration(days: 1));
-    }
-    setState(() {
-      timeToSS = nextSS.difference(nowUtc);
-    });
-  }
-
-  Map<String, String> getRashidData() {
-    final now = DateTime.now();
-    switch (now.weekday) {
-      case DateTime.monday: return {'city': 'Svargrond', 'bg': '0xFF192A44'};
-      case DateTime.tuesday: return {'city': 'Liberty Bay', 'bg': '0xFF1A384A'};
-      case DateTime.wednesday: return {'city': 'Port Hope', 'bg': '0xFF143322'};
-      case DateTime.thursday: return {'city': 'Ankrahmun', 'bg': '0xFF473C1E'};
-      case DateTime.friday: return {'city': 'Darashia', 'bg': '0xFF4A3E20'};
-      case DateTime.saturday: return {'city': 'Edron', 'bg': '0xFF272A3D'};
-      case DateTime.sunday: return {'city': 'Carlin', 'bg': '0xFF20352A'};
-      default: return {'city': 'Darashia', 'bg': '0xFF4A3E20'};
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hours = timeToSS.inHours.toString().padLeft(2, '0');
-    final minutes = (timeToSS.inMinutes % 60).toString().padLeft(2, '0');
-    final seconds = (timeToSS.inSeconds % 60).toString().padLeft(2, '0');
-    final rData = getRashidData();
-
-    const rashidWalkingUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=146&addons=0&head=78&body=106&legs=58&feet=76&direction=3";
-
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0D12),
-        title: const Text("MUNDO & TIBIA LIVE", style: TextStyle(fontFamily: 'monospace', color: Colors.white, fontSize: 15)),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(14),
-        children: [
-          // Contador Server Save
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFF141922), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF00FFB2).withOpacity(0.4))),
-            child: Column(
-              children: [
-                const Text("⏳ CUENTA REGRESIVA SERVER SAVE (SS)", style: TextStyle(color: Color(0xFF00FFB2), fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 6),
-                Text("$hours : $minutes : $seconds", style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 2)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // -------------------------------------------------------------
-          // BLOQUES BOOSTED CREATURE & BOOSTED BOSS (IDÉNTICO A TIBIA LIVE)
-          // -------------------------------------------------------------
-          Row(
-            children: [
-              // 1. Boosted Creature
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF151921),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: Colors.white10),
-                  ),
-                  child: Column(
-                    children: [
-                      const Text(
-                        "Boosted Creature",
-                        style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        height: 52,
-                        child: boostedCreatureImg.isNotEmpty
-                            ? Image.network(
-                                boostedCreatureImg,
-                                fit: BoxFit.contain,
-                                filterQuality: FilterQuality.none,
-                                errorBuilder: (_, __, ___) => const Icon(Icons.pest_control, color: Colors.white24, size: 36),
-                              )
-                            : const Icon(Icons.pest_control, color: Colors.white24, size: 36),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        boostedCreatureName,
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-
-              // 2. Boosted Boss
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF151921),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: Colors.white10),
-                  ),
-                  child: Column(
-                    children: [
-                      const Text(
-                        "Boosted Boss",
-                        style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        height: 52,
-                        child: boostedBossImg.isNotEmpty
-                            ? Image.network(
-                                boostedBossImg,
-                                fit: BoxFit.contain,
-                                filterQuality: FilterQuality.none,
-                                errorBuilder: (_, __, ___) => const Icon(Icons.shield, color: Colors.white24, size: 36),
-                              )
-                            : const Icon(Icons.shield, color: Colors.white24, size: 36),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        boostedBossName,
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // -------------------------------------------------------------
-          // TARJETA DE RASHID CON MINIMAPA REAL Y SPRITE CAMINANDO
-          // -------------------------------------------------------------
-          Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF151921),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.white12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-                  color: const Color(0xFF0D1016),
-                  child: const Text(
-                    "Todos los mundos",
-                    style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
-                  ),
-                ),
-                Container(
-                  height: 130,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Color(int.parse(rData['bg']!)),
-                  ),
-                  child: Stack(
-                    children: [
-                      // Minimapa esquemático auténtico de Darashia / Ciudades
-                      Positioned(
-                        left: 14,
-                        top: 14,
-                        child: Container(
-                          width: 140,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFD2B57B), // Color arena desierto Darashia
-                            border: Border.all(color: Colors.black45),
-                          ),
-                          child: CustomPaint(
-                            painter: MinimapHousesPainter(),
-                          ),
-                        ),
-                      ),
-                      // Rashid caminando en diagonal (estilo Tibia Live)
-                      Positioned(
-                        right: 35,
-                        top: 25,
-                        child: Image.network(
-                          rashidWalkingUrl,
-                          width: 65,
-                          height: 65,
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.none,
-                          errorBuilder: (_, __, ___) => const Text("🚶", style: TextStyle(fontSize: 32)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                  color: const Color(0xFF1E2634),
-                  child: Text(
-                    "Rashid esta en ${rData['city']}",
-                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// Pintor de casitas en cuadritos para el minimapa
+// Minimapa
 class MinimapHousesPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final housePaint = Paint()
-      ..color = const Color(0xFF8B4513) // Techos marrones
-      ..style = PaintingStyle.fill;
-
-    final wallPaint = Paint()
-      ..color = Colors.black87
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
+    final housePaint = Paint()..color = const Color(0xFF8B4513)..style = PaintingStyle.fill;
+    final wallPaint = Paint()..color = Colors.black87..style = PaintingStyle.stroke..strokeWidth = 1.0;
 
     final houses = [
-      Rect.fromLTWH(15, 15, 20, 20),
-      Rect.fromLTWH(45, 15, 25, 20),
-      Rect.fromLTWH(80, 20, 20, 25),
-      Rect.fromLTWH(20, 48, 22, 22),
-      Rect.fromLTWH(55, 50, 30, 25),
-      Rect.fromLTWH(100, 55, 20, 20),
+      Rect.fromLTWH(10, 10, 18, 18),
+      Rect.fromLTWH(35, 12, 22, 16),
+      Rect.fromLTWH(68, 16, 18, 20),
+      Rect.fromLTWH(15, 38, 20, 18),
+      Rect.fromLTWH(48, 40, 24, 20),
     ];
 
     for (var h in houses) {
@@ -1334,111 +1486,4 @@ class MinimapHousesPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// -------------------------------------------------------------
-// PESTAÑA 3: EVENTOS
-// -------------------------------------------------------------
-class EventsScreen extends StatefulWidget {
-  const EventsScreen({super.key});
-
-  @override
-  State<EventsScreen> createState() => _EventsScreenState();
-}
-
-class _EventsScreenState extends State<EventsScreen> {
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  String getTimeRemaining(int targetDays, int targetHours) {
-    final now = DateTime.now();
-    var targetDate = DateTime(now.year, now.month, now.day + targetDays, targetHours, 0, 0);
-    final diff = targetDate.difference(now);
-
-    final days = diff.inDays;
-    final hrs = diff.inHours % 24;
-    final mins = diff.inMinutes % 60;
-    final secs = diff.inSeconds % 60;
-
-    return "${days}d ${hrs.toString().padLeft(2, '0')}h ${mins.toString().padLeft(2, '0')}m ${secs.toString().padLeft(2, '0')}s";
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0D12),
-        title: const Text("CRONÓMETROS DE EVENTOS", style: TextStyle(fontFamily: 'monospace', color: Colors.white, fontSize: 15)),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(14),
-        children: [
-          _liveEventCard(
-            title: "⚔️ DOBLE EXP & SKILL",
-            countdown: getTimeRemaining(12, 10),
-            desc: "Doble experiencia en cacería y doble velocidad en training.",
-            color: const Color(0xFF00FFB2),
-          ),
-          const SizedBox(height: 14),
-          _liveEventCard(
-            title: "🔨 EVENTO DE FORJA / TIERS",
-            countdown: getTimeRemaining(20, 10),
-            desc: "Bonus de Fusión: mayor tasa de éxito y menor gasto de Dust.",
-            color: Colors.amber,
-          ),
-          const SizedBox(height: 14),
-          _liveEventCard(
-            title: "⚡ RAPID RESPAWN & LOOT",
-            countdown: getTimeRemaining(6, 10),
-            desc: "Reaparición acelerada de monstruos para completar el Bestiary.",
-            color: const Color(0xFF00E5FF),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _liveEventCard({required String title, required String countdown, required String desc, required Color color}) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF151921),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.5), width: 1.2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: TextStyle(color: color, fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13)),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(color: const Color(0xFF0A0D12), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white12)),
-            child: Row(
-              children: [
-                const Icon(Icons.timer, color: Colors.white70, size: 16),
-                const SizedBox(width: 8),
-                Text("⏳ Inicia en: $countdown", style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(desc, style: const TextStyle(color: Colors.white60, fontFamily: 'monospace', fontSize: 11)),
-        ],
-      ),
-    );
-  }
 }
