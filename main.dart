@@ -131,7 +131,7 @@ class TrackTarget {
 }
 
 // -------------------------------------------------------------
-// PESTAÑA 1: WAR HUD (MUÑECOS OFICIALES EN MOVIMIENTO CAMINANDO)
+// PESTAÑA 1: WAR HUD
 // -------------------------------------------------------------
 class RadarScreen extends StatefulWidget {
   const RadarScreen({super.key});
@@ -153,10 +153,11 @@ class _RadarScreenState extends State<RadarScreen> {
 
   Map<String, dynamic> onlinePlayersData = {};
   Map<String, Map<String, dynamic>> characterInfoCache = {};
+  Map<String, List<dynamic>> characterDeaths = {};
+  Map<String, bool> loadingDeaths = {};
 
   Map<String, int> loginTimestamps = {};
-  Map<String, int> sessionDurations = {};
-  Map<String, String> logoutTimes = {};
+  Map<String, int> logoutTimestamps = {};
 
   Map<String, bool> muteLoginMap = {};
   Map<String, bool> muteLogoutMap = {};
@@ -174,7 +175,8 @@ class _RadarScreenState extends State<RadarScreen> {
   void initState() {
     super.initState();
     initRadar();
-    _clockUpdater = Timer.periodic(const Duration(seconds: 30), (_) {
+    // Refresco cada segundo para que los cronómetros de tiempo online/offline avancen en vivo
+    _clockUpdater = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
   }
@@ -190,8 +192,16 @@ class _RadarScreenState extends State<RadarScreen> {
     }
 
     for (var t in targets) {
-      muteLoginMap[t.name.toLowerCase()] = prefs.getBool('mute_login_${t.name.toLowerCase()}') ?? false;
-      muteLogoutMap[t.name.toLowerCase()] = prefs.getBool('mute_logout_${t.name.toLowerCase()}') ?? false;
+      final key = t.name.toLowerCase();
+      muteLoginMap[key] = prefs.getBool('mute_login_$key') ?? false;
+      muteLogoutMap[key] = prefs.getBool('mute_logout_$key') ?? false;
+      
+      // Cargar timestamp de desconexión persistente guardado
+      final savedLogout = prefs.getInt('logout_ts_$key');
+      if (savedLogout != null) {
+        logoutTimestamps[key] = savedLogout;
+      }
+      
       fetchCharacterDetails(t.name);
     }
 
@@ -228,17 +238,49 @@ class _RadarScreenState extends State<RadarScreen> {
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         final ch = data['character']?['character'];
+        final deaths = data['character']?['deaths'] ?? [];
         if (ch != null) {
+          final lastLoginStr = ch['last_login'] ?? '';
+          if (lastLoginStr.isNotEmpty && !logoutTimestamps.containsKey(key)) {
+            try {
+              final parsed = DateTime.parse(lastLoginStr).millisecondsSinceEpoch;
+              logoutTimestamps[key] = parsed;
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setInt('logout_ts_$key', parsed);
+            } catch (_) {}
+          }
+
           setState(() {
             characterInfoCache[key] = {
               'level': ch['level'] ?? 0,
               'vocation': ch['vocation'] ?? 'None',
-              'last_login': ch['last_login'] ?? '',
+              'last_login': lastLoginStr,
             };
+            characterDeaths[key] = deaths;
           });
         }
       }
     } catch (_) {}
+  }
+
+  Future<void> fetchDeaths(String charName) async {
+    final key = charName.toLowerCase();
+    setState(() => loadingDeaths[key] = true);
+    try {
+      final response = await http.get(
+        Uri.parse('https://api.tibiadata.com/v4/character/${Uri.encodeComponent(charName)}'),
+        headers: {'User-Agent': 'Mozilla/5.0 (Android; Mobile)'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List deaths = data['character']?['deaths'] ?? [];
+        setState(() => characterDeaths[key] = deaths);
+      }
+    } catch (_) {
+    } finally {
+      setState(() => loadingDeaths[key] = false);
+    }
   }
 
   @override
@@ -315,14 +357,14 @@ class _RadarScreenState extends State<RadarScreen> {
     }
 
     final now = DateTime.now().millisecondsSinceEpoch;
+    final prefs = await SharedPreferences.getInstance();
+
     for (var t in targets) {
       final name = t.name.toLowerCase();
+      // Si estaba online y en el nuevo escaneo no está, desconectó
       if (onlinePlayersData.containsKey(name) && !newOnlineMap.containsKey(name)) {
-        if (loginTimestamps.containsKey(name)) {
-          sessionDurations[name] = now - loginTimestamps[name]!;
-        }
-        final dt = DateTime.now();
-        logoutTimes[name] = "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+        logoutTimestamps[name] = now;
+        await prefs.setInt('logout_ts_$name', now);
         addLog("🛑 [OFFLINE]: ${t.name.toUpperCase()} desconectó de ${t.world}");
       }
     }
@@ -435,31 +477,25 @@ class _RadarScreenState extends State<RadarScreen> {
     );
   }
 
-  // STICKERS DE MUÑECOS OFICIALES DE TIBIA EN MOVIMIENTO CAMINANDO
   Widget _getOfficialVocationSprite(String? vocation, bool isOnline) {
     final voc = (vocation ?? '').toLowerCase();
     String animUrl;
 
     if (voc.contains('sorcerer')) {
-      // Mago con Sombrero de Ferumbras y Varita en movimiento (Looktype 130, Addons 3)
       animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=130&addons=3&direction=2";
     } else if (voc.contains('knight')) {
-      // Caballero con armadura pesada y espada en movimiento (Looktype 131, Addons 3)
       animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=131&addons=3&direction=2";
     } else if (voc.contains('paladin')) {
-      // Paladín / Cazador con capucha y guantes en movimiento (Looktype 129, Addons 3)
       animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=129&addons=3&direction=2";
     } else if (voc.contains('druid')) {
-      // Druida con cuernos y pieles en movimiento (Looktype 144, Addons 3)
       animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=144&addons=3&direction=2";
     } else {
-      // Ciudadano con mochila en movimiento (Looktype 128, Addons 3)
       animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=128&addons=3&direction=2";
     }
 
     return Container(
-      width: 52,
-      height: 52,
+      width: 50,
+      height: 50,
       decoration: BoxDecoration(
         color: const Color(0xFF070B14),
         borderRadius: BorderRadius.circular(6),
@@ -473,18 +509,10 @@ class _RadarScreenState extends State<RadarScreen> {
           opacity: isOnline ? 1.0 : 0.35,
           child: Image.network(
             animUrl,
-            width: 48,
-            height: 48,
+            width: 46,
+            height: 46,
             fit: BoxFit.contain,
-            filterQuality: FilterQuality.none, // Mantener nitidez de píxeles estilo Tibia
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
-              return const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00E5FF)),
-              );
-            },
+            filterQuality: FilterQuality.none,
             errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white24),
           ),
         ),
@@ -492,17 +520,24 @@ class _RadarScreenState extends State<RadarScreen> {
     );
   }
 
-  String formatDuration(int millis) {
-    final mins = (millis / 60000).floor();
-    if (mins < 60) return "$mins min";
+  // Formato exacto de tiempo transcurrido (hace X min, horas, días)
+  String formatElapsedTime(int millis) {
+    final seconds = (millis / 1000).floor();
+    if (seconds < 60) return "${seconds}s";
+    final mins = (seconds / 60).floor();
+    if (mins < 60) return "${mins}m";
     final hrs = (mins / 60).floor();
     final remMins = mins % 60;
-    return "${hrs}h ${remMins}m";
+    if (hrs < 24) return "${hrs}h ${remMins}m";
+    final days = (hrs / 24).floor();
+    final remHrs = hrs % 24;
+    return "${days}d ${remHrs}h";
   }
 
   @override
   Widget build(BuildContext context) {
     final displayList = dynamicFilteredTargets;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
 
     return Scaffold(
       appBar: AppBar(
@@ -665,6 +700,7 @@ class _RadarScreenState extends State<RadarScreen> {
                 ),
               ),
 
+            // LISTA DE TARJETAS CON DESPLEGABLE DE MUERTES Y CONTADOR PERMANENTE
             Expanded(
               flex: 4,
               child: ListView.builder(
@@ -675,23 +711,25 @@ class _RadarScreenState extends State<RadarScreen> {
                   final isOnline = onlinePlayersData.containsKey(key);
                   final onlineData = onlinePlayersData[key];
                   final cachedInfo = characterInfoCache[key] ?? {};
+                  final deaths = characterDeaths[key] ?? [];
                   final isChecked = selectedTargets.contains(key);
 
                   final level = isOnline ? (onlineData['level'] ?? 0) : (cachedInfo['level'] ?? 0);
                   final vocation = isOnline ? (onlineData['vocation'] ?? '') : (cachedInfo['vocation'] ?? 'Consultando...');
 
+                  // CONTADOR DINÁMICO EN VIVO (ONLINE U OFFLINE NUNCA SE PIERDE)
                   String timerText = "";
                   if (isOnline) {
                     if (loginTimestamps.containsKey(key)) {
-                      final diff = DateTime.now().millisecondsSinceEpoch - loginTimestamps[key]!;
-                      timerText = "⏱️ En línea: ${formatDuration(diff)}";
+                      final diff = nowMs - loginTimestamps[key]!;
+                      timerText = "⏱️ En línea hace: ${formatElapsedTime(diff)}";
                     } else {
                       timerText = "⏱️ En línea";
                     }
                   } else {
-                    if (sessionDurations.containsKey(key)) {
-                      final dur = formatDuration(sessionDurations[key]!);
-                      timerText = "🕒 Salió hace poco (Duró $dur)";
+                    if (logoutTimestamps.containsKey(key)) {
+                      final diff = nowMs - logoutTimestamps[key]!;
+                      timerText = "🔴 Desconectado hace: ${formatElapsedTime(diff)}";
                     } else {
                       timerText = "⚫ Desconectado";
                     }
@@ -701,17 +739,22 @@ class _RadarScreenState extends State<RadarScreen> {
                       ? (target.type == 'amigo' ? const Color(0xFF00FFB2) : const Color(0xFF00E5FF))
                       : Colors.white12;
 
-                  return InkWell(
-                    onLongPress: () => _showIndividualAlertConfig(target),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0C111C),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: cardBorderColor, width: isOnline ? 1.6 : 1.0),
-                        boxShadow: isOnline ? [BoxShadow(color: cardBorderColor.withOpacity(0.18), blurRadius: 6, spreadRadius: 1)] : [],
-                      ),
-                      child: ListTile(
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0C111C),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: cardBorderColor, width: isOnline ? 1.5 : 1.0),
+                      boxShadow: isOnline ? [BoxShadow(color: cardBorderColor.withOpacity(0.18), blurRadius: 6, spreadRadius: 1)] : [],
+                    ),
+                    child: Theme(
+                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        onExpansionChanged: (expanded) {
+                          if (expanded && deaths.isEmpty) {
+                            fetchDeaths(target.name);
+                          }
+                        },
                         leading: isSelectionMode
                             ? Checkbox(
                                 activeColor: const Color(0xFF00E5FF),
@@ -730,9 +773,12 @@ class _RadarScreenState extends State<RadarScreen> {
                             : _getOfficialVocationSprite(vocation, isOnline),
                         title: Row(
                           children: [
-                            Text(
-                              target.name.toUpperCase(),
-                              style: TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13, color: isOnline ? Colors.white : Colors.white60),
+                            Flexible(
+                              child: Text(
+                                target.name.toUpperCase(),
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13, color: isOnline ? Colors.white : Colors.white60),
+                              ),
                             ),
                             const SizedBox(width: 6),
                             Container(
@@ -746,7 +792,7 @@ class _RadarScreenState extends State<RadarScreen> {
                                 style: TextStyle(fontSize: 8, fontFamily: 'monospace', fontWeight: FontWeight.bold, color: target.world == 'Ferobra' ? const Color(0xFF00E5FF) : Colors.amber),
                               ),
                             ),
-                            const Spacer(),
+                            const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                               decoration: BoxDecoration(
@@ -771,16 +817,101 @@ class _RadarScreenState extends State<RadarScreen> {
                             const SizedBox(height: 2),
                             Text(
                               timerText,
-                              style: TextStyle(color: isOnline ? Colors.amberAccent : Colors.white30, fontSize: 9, fontFamily: 'monospace'),
+                              style: TextStyle(color: isOnline ? Colors.amberAccent : Colors.white54, fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
-                        trailing: isSelectionMode
-                            ? null
-                            : IconButton(
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.settings, color: Colors.white38, size: 18),
+                              onPressed: () => _showIndividualAlertConfig(target),
+                            ),
+                            if (!isSelectionMode)
+                              IconButton(
                                 icon: const Icon(Icons.close, color: Colors.redAccent, size: 16),
                                 onPressed: () => removeTarget(target.name),
                               ),
+                          ],
+                        ),
+                        // DESPLEGABLE: HISTORIAL DE MUERTES
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF080C14),
+                              border: Border(top: BorderSide(color: Colors.white10)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text("💀 HISTORIAL DE MUERTES", style: TextStyle(color: Color(0xFFFF5252), fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
+                                    if (loadingDeaths[key] == true)
+                                      const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF5252))),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                if (deaths.isEmpty && loadingDeaths[key] != true)
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 4),
+                                    child: Text("Sin muertes recientes registradas en la web.", style: TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace')),
+                                  )
+                                else
+                                  ...deaths.take(4).map((d) {
+                                    final killers = (d['killers'] as List? ?? []);
+                                    String killerName = "Criatura desconocida";
+                                    bool isPk = false;
+                                    if (killers.isNotEmpty) {
+                                      killerName = killers.first['name'] ?? 'Desconocido';
+                                      isPk = killers.first['player'] == true;
+                                    }
+                                    final dateStr = (d['time'] ?? '').toString().replaceFirst('T', ' ').replaceAll('Z', '');
+
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 6),
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF0F1522),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: isPk ? Colors.redAccent.withOpacity(0.5) : Colors.white10),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(isPk ? Icons.sports_kabaddi : Icons.dangerous, color: isPk ? Colors.redAccent : Colors.orangeAccent, size: 16),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  "Murió a Lvl ${d['level']} por: ${killerName.toUpperCase()}",
+                                                  style: TextStyle(color: isPk ? const Color(0xFFFF6B6B) : Colors.white, fontFamily: 'monospace', fontSize: 10, fontWeight: FontWeight.bold),
+                                                ),
+                                                Text(
+                                                  dateStr,
+                                                  style: const TextStyle(color: Colors.white38, fontSize: 9, fontFamily: 'monospace'),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          if (isPk)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                              decoration: BoxDecoration(color: Colors.red.withOpacity(0.2), borderRadius: BorderRadius.circular(3)),
+                                              child: const Text("PK", style: TextStyle(color: Colors.redAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                                            )
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                              ],
+                            ),
+                          )
+                        ],
                       ),
                     ),
                   );
@@ -829,7 +960,7 @@ class _RadarScreenState extends State<RadarScreen> {
 }
 
 // -------------------------------------------------------------
-// PESTAÑA 2: MUNDO & RASHID (RASHID OFICIAL CAMINANDO EN VIVO)
+// PESTAÑA 2: MUNDO & RASHID
 // -------------------------------------------------------------
 class WorldScreen extends StatefulWidget {
   const WorldScreen({super.key});
@@ -887,7 +1018,6 @@ class _WorldScreenState extends State<WorldScreen> {
     final seconds = (timeToSS.inSeconds % 60).toString().padLeft(2, '0');
     final rData = getRashidData();
 
-    // Rashid oficial Oriental (Looktype 146 con sus colores oficiales) caminando en vivo
     const rashidWalkingUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=146&addons=0&head=78&body=106&legs=58&feet=76&direction=2";
 
     return Scaffold(
@@ -940,7 +1070,6 @@ class _WorldScreenState extends State<WorldScreen> {
                   ),
                   child: Stack(
                     children: [
-                      // Fondo de minimapa oficial de Tibia sin bloqueos
                       Positioned.fill(
                         child: Opacity(
                           opacity: 0.28,
@@ -951,7 +1080,6 @@ class _WorldScreenState extends State<WorldScreen> {
                           ),
                         ),
                       ),
-                      // Datos de ubicación
                       Positioned(
                         left: 20,
                         top: 35,
@@ -980,7 +1108,6 @@ class _WorldScreenState extends State<WorldScreen> {
                           ],
                         ),
                       ),
-                      // RASHID OFICIAL CAMINANDO EN VIVO
                       Positioned(
                         right: 25,
                         bottom: 25,
@@ -1028,7 +1155,7 @@ class _WorldScreenState extends State<WorldScreen> {
 }
 
 // -------------------------------------------------------------
-// PESTAÑA 3: EVENTOS (CRONÓMETROS DIGITALES EN VIVO)
+// PESTAÑA 3: EVENTOS
 // -------------------------------------------------------------
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
