@@ -11,6 +11,15 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.tactical.tibia/radar"
 
+    override fun onResume() {
+        super.onResume()
+        // Si tocas la notificación, apaga la sirena de inmediato
+        val intent = Intent(this, RadarService::class.java).apply {
+            action = RadarService.ACTION_STOP_SIREN
+        }
+        startService(intent)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -40,6 +49,13 @@ class MainActivity : FlutterActivity() {
                     val targets = call.argument<List<String>>("targets") ?: emptyList()
                     val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
                     prefs.edit().putStringSet("direct_radar_targets", targets.toSet()).apply()
+                    result.success(true)
+                }
+                "stopSiren" -> {
+                    val intent = Intent(this, RadarService::class.java).apply {
+                        action = RadarService.ACTION_STOP_SIREN
+                    }
+                    startService(intent)
                     result.success(true)
                 }
                 else -> result.notImplemented()
