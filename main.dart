@@ -34,7 +34,7 @@ class RadarScreen extends StatefulWidget {
 
 class _RadarScreenState extends State<RadarScreen> {
   final String world = 'Ferobra';
-  final List<String> targets = ['fingor'];
+  final List<String> targets = ['fingor', 'edwing ek'];
   final TextEditingController _targetController = TextEditingController();
   
   Map<String, dynamic> onlineTargets = {};
@@ -46,9 +46,8 @@ class _RadarScreenState extends State<RadarScreen> {
   void initState() {
     super.initState();
     addLog("SISTEMA RADAR INICIALIZADO.");
-    addLog("OBJETIVO PRINCIPAL FIJADO: FINGOR");
     scanRadar();
-    _timer = Timer.periodic(const Duration(seconds: 45), (timer) {
+    _timer = Timer.periodic(const Duration(seconds: 40), (timer) {
       scanRadar();
     });
   }
@@ -64,7 +63,7 @@ class _RadarScreenState extends State<RadarScreen> {
     final time = DateTime.now().toIso8601String().substring(11, 19);
     setState(() {
       radarLogs.insert(0, "[$time] $message");
-      if (radarLogs.length > 20) radarLogs.removeLast();
+      if (radarLogs.length > 25) radarLogs.removeLast();
     });
   }
 
@@ -74,8 +73,8 @@ class _RadarScreenState extends State<RadarScreen> {
 
     try {
       final response = await http.get(
-        Uri.parse('https://api.tibia.data.v4.tibia.lat/v4/world/$world'),
-      );
+        Uri.parse('https://api.tibiadata.com/v4/world/$world'),
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -88,24 +87,26 @@ class _RadarScreenState extends State<RadarScreen> {
           if (targets.contains(name)) {
             currentlyOnline[name] = p;
             if (!onlineTargets.containsKey(name)) {
-              addLog("⚠️ OBJETIVO DETECTADO: ${p['name']} (Lvl ${p['level']})");
+              addLog("⚠️ OBJETIVO CONECTADO: ${p['name']} (Lvl ${p['level']})");
             }
           }
         }
 
         for (var oldTarget in onlineTargets.keys) {
           if (!currentlyOnline.containsKey(oldTarget)) {
-            addLog("🛑 OBJETIVO DESCONECTADO: ${oldTarget.toUpperCase()}");
+            addLog("🛑 OBJETIVO SALIÓ: ${oldTarget.toUpperCase()}");
           }
         }
 
         setState(() {
           onlineTargets = currentlyOnline;
         });
-        addLog("Escaneo completado. ${players.length} jugadores en Ferobra.");
+        addLog("Escaneo OK: ${players.length} jugadores en $world.");
+      } else {
+        addLog("API Status Code: ${response.statusCode}");
       }
     } catch (e) {
-      addLog("ERROR: Falla de enlace satelital con TibiaData.");
+      addLog("ERROR RED: ${e.toString().split('\n').first}");
     } finally {
       setState(() => isScanning = false);
     }
@@ -117,7 +118,7 @@ class _RadarScreenState extends State<RadarScreen> {
       setState(() {
         targets.add(text);
       });
-      addLog("Nuevo enemigo en lista negra: ${text.toUpperCase()}");
+      addLog("Objetivo añadido: ${text.toUpperCase()}");
       _targetController.clear();
       scanRadar();
     }
@@ -128,7 +129,7 @@ class _RadarScreenState extends State<RadarScreen> {
       targets.remove(name);
       onlineTargets.remove(name);
     });
-    addLog("Objetivo removido: ${name.toUpperCase()}");
+    addLog("Objetivo eliminado: ${name.toUpperCase()}");
   }
 
   @override

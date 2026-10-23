@@ -21,6 +21,8 @@ jobs:
           flutter create --org com.tactical.tibia --project-name tibia_radar app
           cp main.dart app/lib/main.dart
           cd app
+          # Activar permiso de Internet en Android
+          sed -i 's/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android">/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android">\n    <uses-permission android:name="android.permission.INTERNET"\/>/' android/app/src/main/AndroidManifest.xml
           flutter pub add http
           flutter build apk --release
 
