@@ -131,7 +131,7 @@ class TrackTarget {
 }
 
 // -------------------------------------------------------------
-// PESTAÑA 1: WAR HUD (MAGO CON FERUMBRAS HAT & SPRITES OFICIALES)
+// PESTAÑA 1: WAR HUD (MUÑECOS OFICIALES EN MOVIMIENTO CAMINANDO)
 // -------------------------------------------------------------
 class RadarScreen extends StatefulWidget {
   const RadarScreen({super.key});
@@ -153,8 +153,6 @@ class _RadarScreenState extends State<RadarScreen> {
 
   Map<String, dynamic> onlinePlayersData = {};
   Map<String, Map<String, dynamic>> characterInfoCache = {};
-  Map<String, List<dynamic>> characterDeaths = {};
-  Map<String, bool> loadingDeaths = {};
 
   Map<String, int> loginTimestamps = {};
   Map<String, int> sessionDurations = {};
@@ -317,7 +315,6 @@ class _RadarScreenState extends State<RadarScreen> {
     }
 
     final now = DateTime.now().millisecondsSinceEpoch;
-    // Únicamente registra desconexiones de personas en la lista (CERO desconocidos)
     for (var t in targets) {
       final name = t.name.toLowerCase();
       if (onlinePlayersData.containsKey(name) && !newOnlineMap.containsKey(name)) {
@@ -334,27 +331,6 @@ class _RadarScreenState extends State<RadarScreen> {
       onlinePlayersData = newOnlineMap;
       isScanning = false;
     });
-  }
-
-  Future<void> fetchDeaths(String charName) async {
-    if (characterDeaths.containsKey(charName)) return;
-    setState(() => loadingDeaths[charName] = true);
-    try {
-      final response = await http.get(
-        Uri.parse('https://api.tibiadata.com/v4/character/${Uri.encodeComponent(charName)}'),
-        headers: {'User-Agent': 'Mozilla/5.0 (Android; Mobile)'},
-      ).timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List deaths = data['character']?['deaths'] ?? [];
-        setState(() => characterDeaths[charName] = deaths);
-      }
-    } catch (_) {
-      setState(() => characterDeaths[charName] = []);
-    } finally {
-      setState(() => loadingDeaths[charName] = false);
-    }
   }
 
   void addTarget(String type) {
@@ -400,34 +376,6 @@ class _RadarScreenState extends State<RadarScreen> {
         selectedTargets.addAll(targets.map((t) => t.name.toLowerCase()));
       }
     });
-  }
-
-  void clearAllTargets() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF14080D),
-        title: const Text("¿PURGAR LISTA COMPLETA?", style: TextStyle(color: Color(0xFFFF0055), fontSize: 14, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-        content: const Text("Se borrarán todos los personajes (Amigos y Enemigos).", style: TextStyle(color: Colors.white70, fontSize: 12, fontFamily: 'monospace')),
-        actions: [
-          TextButton(child: const Text("CANCELAR", style: TextStyle(color: Colors.grey)), onPressed: () => Navigator.pop(ctx)),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF0055), foregroundColor: Colors.white),
-            onPressed: () {
-              Navigator.pop(ctx);
-              setState(() {
-                targets.clear();
-                selectedTargets.clear();
-                isSelectionMode = false;
-              });
-              syncNativeService();
-              addLog("LISTA PURGADA POR COMPLETO.");
-            },
-            child: const Text("PURGAR TODO"),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showIndividualAlertConfig(TrackTarget target) {
@@ -487,83 +435,61 @@ class _RadarScreenState extends State<RadarScreen> {
     );
   }
 
-  // SPRITE OFICIAL ANIMADO DE VOCACIÓN (MAGO FULL CON FERUMBRAS HAT)
+  // STICKERS DE MUÑECOS OFICIALES DE TIBIA EN MOVIMIENTO CAMINANDO
   Widget _getOfficialVocationSprite(String? vocation, bool isOnline) {
     final voc = (vocation ?? '').toLowerCase();
-    String spriteUrl;
+    String animUrl;
 
     if (voc.contains('sorcerer')) {
-      // MAGO FULL CON EL SOMBRERO DE FERUMBRAS (OFFICIAL GIF)
-      spriteUrl = "https://tibia.fandom.com/wiki/Special:FilePath/Outfit_Mage_Male_Addon_3.gif";
+      // Mago con Sombrero de Ferumbras y Varita en movimiento (Looktype 130, Addons 3)
+      animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=130&addons=3&direction=2";
     } else if (voc.contains('knight')) {
-      // GUERRERO CON ESPADA / FULL KNIGHT (OFFICIAL GIF)
-      spriteUrl = "https://tibia.fandom.com/wiki/Special:FilePath/Outfit_Warrior_Male_Addon_3.gif";
+      // Caballero con armadura pesada y espada en movimiento (Looktype 131, Addons 3)
+      animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=131&addons=3&direction=2";
     } else if (voc.contains('paladin')) {
-      // CAZADOR CON MOCHILA / HUNTER FULL (OFFICIAL GIF)
-      spriteUrl = "https://tibia.fandom.com/wiki/Special:FilePath/Outfit_Hunter_Male_Addon_3.gif";
+      // Paladín / Cazador con capucha y guantes en movimiento (Looktype 129, Addons 3)
+      animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=129&addons=3&direction=2";
     } else if (voc.contains('druid')) {
-      // DRUIDA CON CUERNOS / DRUID FULL (OFFICIAL GIF)
-      spriteUrl = "https://tibia.fandom.com/wiki/Special:FilePath/Outfit_Druid_Male_Addon_3.gif";
+      // Druida con cuernos y pieles en movimiento (Looktype 144, Addons 3)
+      animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=144&addons=3&direction=2";
     } else {
-      spriteUrl = "https://tibia.fandom.com/wiki/Special:FilePath/Outfit_Citizen_Male_Addon_3.gif";
+      // Ciudadano con mochila en movimiento (Looktype 128, Addons 3)
+      animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=128&addons=3&direction=2";
     }
 
     return Container(
-      width: 48,
-      height: 48,
+      width: 52,
+      height: 52,
       decoration: BoxDecoration(
-        color: const Color(0xFF0A0F1A),
+        color: const Color(0xFF070B14),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: isOnline ? const Color(0xFF00FFB2) : Colors.white12, width: isOnline ? 1.5 : 1.0),
+        border: Border.all(
+          color: isOnline ? const Color(0xFF00FFB2) : Colors.white12,
+          width: isOnline ? 1.5 : 1.0,
+        ),
       ),
       child: Center(
         child: Opacity(
           opacity: isOnline ? 1.0 : 0.35,
           child: Image.network(
-            spriteUrl,
-            width: 42,
-            height: 42,
+            animUrl,
+            width: 48,
+            height: 48,
             fit: BoxFit.contain,
+            filterQuality: FilterQuality.none, // Mantener nitidez de píxeles estilo Tibia
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00E5FF)),
+              );
+            },
             errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white24),
           ),
         ),
       ),
     );
-  }
-
-  // MONSTRUO OFICIAL ANIMADO EN MOVIMIENTO (SIN LOGOS NI EMOJIS)
-  Widget _buildOfficialMonsterSprite(dynamic death) {
-    final killers = death['killers'] as List? ?? [];
-    if (killers.isEmpty) {
-      return Image.network("https://tibia.fandom.com/wiki/Special:FilePath/Demon.gif", width: 34, height: 34);
-    }
-
-    final firstKiller = killers.first;
-    final killerName = firstKiller['name']?.toString() ?? 'Demon';
-    final isPlayer = firstKiller['player'] == true;
-
-    if (isPlayer) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        decoration: BoxDecoration(color: const Color(0xFF26080A), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.redAccent)),
-        child: Text("PK: ${killerName.toUpperCase()}", style: const TextStyle(color: Colors.redAccent, fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 10)),
-      );
-    } else {
-      final cleanName = killerName.replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '').trim().replaceAll(' ', '_');
-      final monsterUrl = "https://tibia.fandom.com/wiki/Special:FilePath/$cleanName.gif";
-
-      return Container(
-        padding: const EdgeInsets.all(2),
-        decoration: BoxDecoration(color: const Color(0xFF070B14), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white12)),
-        child: Image.network(
-          monsterUrl,
-          width: 36,
-          height: 36,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => Image.network("https://tibia.fandom.com/wiki/Special:FilePath/Demon.gif", width: 34, height: 34),
-        ),
-      );
-    }
   }
 
   String formatDuration(int millis) {
@@ -615,7 +541,6 @@ class _RadarScreenState extends State<RadarScreen> {
         padding: const EdgeInsets.all(12.0),
         child: Column(
           children: [
-            // PANEL 24/7 FIJO ARRIBA
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
@@ -646,7 +571,6 @@ class _RadarScreenState extends State<RadarScreen> {
             ),
             const SizedBox(height: 8),
 
-            // PANEL AGREGAR CON SELECTOR FEROBRA / QUINTERA
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(color: const Color(0xFF0E1424), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white12)),
@@ -702,7 +626,6 @@ class _RadarScreenState extends State<RadarScreen> {
             ),
             const SizedBox(height: 8),
 
-            // FILTROS
             Row(
               children: [
                 _filterBtn('TODOS'),
@@ -742,7 +665,6 @@ class _RadarScreenState extends State<RadarScreen> {
                 ),
               ),
 
-            // LISTA ORDENADA (ONLINE PRIMERO)
             Expanded(
               flex: 4,
               child: ListView.builder(
@@ -753,7 +675,6 @@ class _RadarScreenState extends State<RadarScreen> {
                   final isOnline = onlinePlayersData.containsKey(key);
                   final onlineData = onlinePlayersData[key];
                   final cachedInfo = characterInfoCache[key] ?? {};
-                  final deaths = characterDeaths[target.name] ?? [];
                   final isChecked = selectedTargets.contains(key);
 
                   final level = isOnline ? (onlineData['level'] ?? 0) : (cachedInfo['level'] ?? 0);
@@ -770,7 +691,6 @@ class _RadarScreenState extends State<RadarScreen> {
                   } else {
                     if (sessionDurations.containsKey(key)) {
                       final dur = formatDuration(sessionDurations[key]!);
-                      final outAt = logoutTimes[key] ?? "";
                       timerText = "🕒 Salió hace poco (Duró $dur)";
                     } else {
                       timerText = "⚫ Desconectado";
@@ -909,7 +829,7 @@ class _RadarScreenState extends State<RadarScreen> {
 }
 
 // -------------------------------------------------------------
-// PESTAÑA 2: MUNDO (TARJETA IDÉNTICA CON RASHID Y MAPA REAL)
+// PESTAÑA 2: MUNDO & RASHID (RASHID OFICIAL CAMINANDO EN VIVO)
 // -------------------------------------------------------------
 class WorldScreen extends StatefulWidget {
   const WorldScreen({super.key});
@@ -949,14 +869,14 @@ class _WorldScreenState extends State<WorldScreen> {
   Map<String, String> getRashidData() {
     final now = DateTime.now();
     switch (now.weekday) {
-      case DateTime.monday: return {'city': 'Svargrond', 'map': 'https://tibia.fandom.com/wiki/Special:FilePath/Svargrond.png'};
-      case DateTime.tuesday: return {'city': 'Liberty Bay', 'map': 'https://tibia.fandom.com/wiki/Special:FilePath/Liberty_Bay.png'};
-      case DateTime.wednesday: return {'city': 'Port Hope', 'map': 'https://tibia.fandom.com/wiki/Special:FilePath/Port_Hope.png'};
-      case DateTime.thursday: return {'city': 'Ankrahmun', 'map': 'https://tibia.fandom.com/wiki/Special:FilePath/Ankrahmun.png'};
-      case DateTime.friday: return {'city': 'Darashia', 'map': 'https://tibia.fandom.com/wiki/Special:FilePath/Darashia.PNG'};
-      case DateTime.saturday: return {'city': 'Edron', 'map': 'https://tibia.fandom.com/wiki/Special:FilePath/Edron.png'};
-      case DateTime.sunday: return {'city': 'Carlin', 'map': 'https://tibia.fandom.com/wiki/Special:FilePath/Carlin.png'};
-      default: return {'city': 'Darashia', 'map': 'https://tibia.fandom.com/wiki/Special:FilePath/Darashia.PNG'};
+      case DateTime.monday: return {'city': 'Svargrond', 'tavern': 'Taberna de Dankwart (Sur del templo)'};
+      case DateTime.tuesday: return {'city': 'Liberty Bay', 'tavern': 'Taberna de Lyonel (Oeste del depot)'};
+      case DateTime.wednesday: return {'city': 'Port Hope', 'tavern': 'Taberna de Clyde (Norte del barco)'};
+      case DateTime.thursday: return {'city': 'Ankrahmun', 'tavern': 'Taberna de Arito (Sobre el correo)'};
+      case DateTime.friday: return {'city': 'Darashia', 'tavern': 'Taberna de Miraia (Sur de guildhalls)'};
+      case DateTime.saturday: return {'city': 'Edron', 'tavern': 'Taberna de Mirabell (Sobre el depot)'};
+      case DateTime.sunday: return {'city': 'Carlin', 'tavern': 'Depot de Carlin (Piso +1)'};
+      default: return {'city': 'Darashia', 'tavern': 'Taberna de Miraia (Sur de guildhalls)'};
     }
   }
 
@@ -966,6 +886,9 @@ class _WorldScreenState extends State<WorldScreen> {
     final minutes = (timeToSS.inMinutes % 60).toString().padLeft(2, '0');
     final seconds = (timeToSS.inSeconds % 60).toString().padLeft(2, '0');
     final rData = getRashidData();
+
+    // Rashid oficial Oriental (Looktype 146 con sus colores oficiales) caminando en vivo
+    const rashidWalkingUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=146&addons=0&head=78&body=106&legs=58&feet=76&direction=2";
 
     return Scaffold(
       appBar: AppBar(
@@ -988,61 +911,110 @@ class _WorldScreenState extends State<WorldScreen> {
           ),
           const SizedBox(height: 16),
 
-          // TARJETA DE RASHID EXACTAMENTE IDÉNTICA A TU FOTO DE REFERENCIA
           Container(
             decoration: BoxDecoration(
               color: const Color(0xFF0E1424),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white12),
+              border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4)),
+              boxShadow: [BoxShadow(color: const Color(0xFF00E5FF).withOpacity(0.08), blurRadius: 10, spreadRadius: 1)],
             ),
             child: Column(
               children: [
-                // Encabezado superior
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   color: const Color(0xFF070B14),
                   child: const Center(
-                    child: Text("Todos los mundos", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                    child: Text("Todos los mundos", style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
                   ),
                 ),
-                // Imagen del mapa con Rashid sobrepuesto a la derecha
                 Container(
                   height: 190,
                   width: double.infinity,
-                  color: const Color(0xFF1B2E68),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xFF101B38), Color(0xFF1A2B58)],
+                    ),
+                  ),
                   child: Stack(
                     children: [
+                      // Fondo de minimapa oficial de Tibia sin bloqueos
                       Positioned.fill(
-                        child: Image.network(
-                          rData['map']!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(color: const Color(0xFF22356B)),
+                        child: Opacity(
+                          opacity: 0.28,
+                          child: Image.network(
+                            "https://tibiamaps.github.io/tibia-map-data/floor-07-map.png",
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const SizedBox(),
+                          ),
                         ),
                       ),
+                      // Datos de ubicación
+                      Positioned(
+                        left: 20,
+                        top: 35,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00FFB2).withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: const Color(0xFF00FFB2), width: 1),
+                              ),
+                              child: const Text("LOCALIZACIÓN CONFIRMADA", style: TextStyle(color: Color(0xFF00FFB2), fontSize: 9, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              rData['city']!.toUpperCase(),
+                              style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 1.5),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              rData['tavern']!,
+                              style: const TextStyle(color: Colors.white70, fontSize: 11, fontFamily: 'monospace'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // RASHID OFICIAL CAMINANDO EN VIVO
                       Positioned(
                         right: 25,
-                        top: 40,
-                        child: Image.network(
-                          "https://tibia.fandom.com/wiki/Special:FilePath/Rashid.gif",
-                          width: 52,
-                          height: 52,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Text("🚶", style: TextStyle(fontSize: 32)),
+                        bottom: 25,
+                        child: Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.black26,
+                            border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
+                          ),
+                          child: Center(
+                            child: Image.network(
+                              rashidWalkingUrl,
+                              width: 68,
+                              height: 68,
+                              fit: BoxFit.contain,
+                              filterQuality: FilterQuality.none,
+                              errorBuilder: (_, __, ___) => const Text("🚶", style: TextStyle(fontSize: 32)),
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                // Barra inferior azul marina
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  color: const Color(0xFF233660),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  color: const Color(0xFF1E2D50),
                   child: Center(
                     child: Text(
-                      "Rashid esta en ${rData['city']}",
-                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                      "Rashid está en ${rData['city']}",
+                      style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
                     ),
                   ),
                 ),

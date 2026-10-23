@@ -100,7 +100,7 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
                 "Alertas Tácticas de Voz",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Alertas de voz para entradas, salidas y muertes"
+                description = "Alertas de voz para entradas y salidas"
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 180, 100, 180)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
@@ -145,7 +145,6 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
         }, 2, 30, TimeUnit.SECONDS)
     }
 
-    // VOZ A VOLUMEN DE ALARMA
     private fun speakText(text: String) {
         try {
             if (ttsReady && tts != null) {
@@ -158,7 +157,6 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
         } catch (e: Exception) {}
     }
 
-    // SIRENA DE 1 SEGUNDO
     private fun playOneSecondSiren() {
         Thread {
             try {
@@ -220,7 +218,6 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
                 conn.connectTimeout = 8000
                 conn.readTimeout = 8000
                 conn.requestMethod = "GET"
-                // User-Agent oficial para que Cloudflare nunca bloquee las peticiones en segundo plano
                 conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
 
                 if (conn.responseCode == 200) {
@@ -265,7 +262,6 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
                     val muteLogout = prefs.getBoolean("flutter.mute_logout_$targetName", false) || prefs.getBoolean("mute_logout_$targetName", false)
                     val charDisplay = targetObj.optString("name").trim()
 
-                    // LOGIN: "Tu amigo Fiodor en Ferobra conectó" / "Tu enemigo..."
                     if (currentOnlineMap.containsKey(targetName) && !prevOnline.contains(targetName)) {
                         if (!muteLogin) {
                             val msg = if (targetType == "amigo") "Tu amigo $charDisplay en $targetWorld conectó." else "Tu enemigo $charDisplay en $targetWorld conectó."
@@ -274,7 +270,6 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
                         }
                     }
 
-                    // LOGOUT: "Tu amigo Fiodor en Ferobra desconectó" / "Tu enemigo..." (+ sirena 1s)
                     if (!currentOnlineMap.containsKey(targetName) && prevOnline.contains(targetName)) {
                         if (!muteLogout) {
                             val msg = if (targetType == "amigo") "Tu amigo $charDisplay en $targetWorld desconectó." else "Tu enemigo $charDisplay en $targetWorld desconectó."
