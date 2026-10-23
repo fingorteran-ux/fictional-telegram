@@ -1,4 +1,4 @@
-package com.tactical.tibia.tibia_radar
+package com.tactical.tibia.spy_ferobra
 
 import android.app.*
 import android.content.Context
@@ -59,7 +59,7 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
             return START_STICKY
         }
 
-        val notification = createPersistentNotification("Vigilando Ferobra 24/7 en segundo plano...")
+        val notification = createPersistentNotification("Spy Ferobra: Vigilancia 24/7 en segundo plano")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(1001, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
@@ -76,7 +76,7 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
 
             val statusChannel = NotificationChannel(
                 "radar_status",
-                "Estado del Radar Táctico",
+                "Estado Spy Ferobra",
                 NotificationManager.IMPORTANCE_LOW
             )
             manager?.createNotificationChannel(statusChannel)
@@ -86,9 +86,9 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
                 "Alertas Tácticas de Emergencia",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Sirenas y notificaciones de voz"
+                description = "Sirenas y avisos de voz"
                 enableVibration(true)
-                vibrationPattern = longArrayOf(0, 300, 200, 300, 200, 300)
+                vibrationPattern = longArrayOf(0, 250, 150, 250)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
             manager?.createNotificationChannel(alertChannel)
@@ -103,7 +103,7 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
         )
 
         return NotificationCompat.Builder(this, "radar_status")
-            .setContentTitle("🛰️ RADAR TÁCTICO // FEROBRA")
+            .setContentTitle("🛰️ SPY FEROBRA // EN VIVO")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
@@ -172,7 +172,7 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
             }
 
             if (!isFirstRun) {
-                // LOGIN: Voz diciendo que conectó
+                // LOGIN: Voz diciendo que conectó + pitidos
                 for (target in targetList) {
                     if (currentOnlineMap.containsKey(target) && !previousOnline.contains(target)) {
                         val info = currentOnlineMap[target] ?: ""
@@ -181,11 +181,11 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
                     }
                 }
 
-                // LOGOUT: Voz diciendo que desconectó + Sirena 30s
+                // LOGOUT: Voz diciendo que desconectó + SIRENA DE 5 SEGUNDOS
                 for (target in targetList) {
                     if (!currentOnlineMap.containsKey(target) && previousOnline.contains(target)) {
                         speakText("Atención: $target, se desconectó tu enemigo.")
-                        triggerThirtySecondSirenAlert(target)
+                        triggerFiveSecondSirenAlert(target)
                     }
                 }
             } else {
@@ -199,7 +199,7 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
             val notifyMgr = getSystemService(NotificationManager::class.java)
             notifyMgr?.notify(
                 1001,
-                createPersistentNotification("Vigilando Ferobra: $onlineCount/${targetList.size} objetivos online")
+                createPersistentNotification("Vigilando Ferobra: $onlineCount/${targetList.size} enemigos activos")
             )
         }
     }
@@ -214,7 +214,7 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
 
         val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
         val builder = NotificationCompat.Builder(this, "radar_alerts")
-            .setContentTitle("⚠️ [OBJETIVO CONECTADO]")
+            .setContentTitle("⚠️ [SPY FEROBRA: CONECTADO]")
             .setContentText("🎯 ${target.uppercase()} ($info) acaba de entrar!")
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -228,9 +228,9 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
         notifyMgr?.notify((System.currentTimeMillis() % 100000).toInt(), builder.build())
     }
 
-    private fun triggerThirtySecondSirenAlert(target: String) {
+    private fun triggerFiveSecondSirenAlert(target: String) {
         wakeUpScreen()
-        startContinuousSirenAudio(30)
+        startContinuousSirenAudio(5) // SIRENA DE 5 SEGUNDOS
 
         val stopIntent = Intent(this, RadarService::class.java).apply {
             action = ACTION_STOP_SIREN
@@ -250,7 +250,7 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
         val notification = NotificationCompat.Builder(this, "radar_alerts")
             .setContentTitle("🚨 ¡ENEMIGO DESCONECTADO! 🚨")
             .setContentText("💀 ${target.uppercase()} acaba de SALIR de Ferobra.")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("💀 ${target.uppercase()} se ha desconectado de Ferobra.\nSirena activa por 30s. Toca para apagar."))
+            .setStyle(NotificationCompat.BigTextStyle().bigText("💀 ${target.uppercase()} salió de Ferobra.\nSirena de 5s. Toca para apagar."))
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
@@ -258,7 +258,7 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
             .setContentIntent(openAppPendingIntent)
             .setDeleteIntent(stopPendingIntent)
             .setAutoCancel(true)
-            .addAction(android.R.drawable.ic_lock_power_off, "SILENCIAR SIRENA", stopPendingIntent)
+            .addAction(android.R.drawable.ic_lock_power_off, "SILENCIAR", stopPendingIntent)
             .build()
 
         val notifyMgr = getSystemService(NotificationManager::class.java)
@@ -271,19 +271,19 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
 
         Thread {
             try {
-                // Pausa para que la voz termine de decir el nombre antes de la sirena
-                Thread.sleep(2500)
+                // Pausa corta para que la voz diga el nombre antes de sonar la sirena
+                Thread.sleep(2200)
                 if (!isSirenRunning) return@Thread
 
                 val sampleRate = 22050
-                val cycleDuration = 1.3
+                val cycleDuration = 1.0
                 val cycleSamples = (sampleRate * cycleDuration).toInt()
                 val buffer = ShortArray(cycleSamples)
                 var phase = 0.0
 
                 for (i in 0 until cycleSamples) {
                     val t = i.toDouble() / sampleRate
-                    val freq = 750.0 + 300.0 * Math.sin(2.0 * Math.PI * (1.0 / cycleDuration) * t)
+                    val freq = 750.0 + 320.0 * Math.sin(2.0 * Math.PI * (1.0 / cycleDuration) * t)
                     phase += 2.0 * Math.PI * freq / sampleRate
                     buffer[i] = (Math.sin(phase) * 32767 * 0.95).toInt().toShort()
                 }
@@ -348,9 +348,9 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
             val wl = pm.newWakeLock(
                 PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
-                "tibia_radar:siren_wake"
+                "spy_ferobra:siren_wake"
             )
-            wl.acquire(10000)
+            wl.acquire(8000)
         } catch (e: Exception) {}
     }
 

@@ -9,7 +9,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  runApp(const TibiaRadarApp());
+  runApp(const SpyFerobraApp());
 }
 
 class TacticalAudio {
@@ -61,13 +61,13 @@ class TacticalAudio {
   }
 }
 
-class TibiaRadarApp extends StatelessWidget {
-  const TibiaRadarApp({super.key});
+class SpyFerobraApp extends StatelessWidget {
+  const SpyFerobraApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Tibia Tactical Radar',
+      title: 'Spy Ferobra',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
@@ -93,8 +93,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     RadarScreen(),
     WorldScreen(),
     EventsScreen(),
-    TasksMarketScreen(),
-    DeletesScreen(),
   ];
 
   @override
@@ -104,18 +102,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (idx) => setState(() => _currentIndex = idx),
-        backgroundColor: const Color(0xFF0C101A),
+        backgroundColor: const Color(0xFF0B0F1A),
         selectedItemColor: const Color(0xFF00E5FF),
         unselectedItemColor: Colors.white38,
-        type: BottomNavigationBarType.fixed,
-        selectedLabelStyle: const TextStyle(fontFamily: 'monospace', fontSize: 10, fontWeight: FontWeight.bold),
-        unselectedLabelStyle: const TextStyle(fontFamily: 'monospace', fontSize: 9),
+        selectedLabelStyle: const TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold),
+        unselectedLabelStyle: const TextStyle(fontFamily: 'monospace', fontSize: 10),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.radar), label: 'WAR HUD'),
-          BottomNavigationBarItem(icon: Icon(Icons.public), label: 'MUNDO'),
-          BottomNavigationBarItem(icon: Icon(Icons.event), label: 'EVENTOS'),
-          BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'TASKS'),
-          BottomNavigationBarItem(icon: Icon(Icons.gavel), label: 'DELETES'),
+          BottomNavigationBarItem(icon: Icon(Icons.public), label: 'MUNDO & RASHID'),
+          BottomNavigationBarItem(icon: Icon(Icons.timer), label: 'EVENTOS'),
         ],
       ),
     );
@@ -123,7 +118,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 }
 
 // -------------------------------------------------------------
-// PESTAÑA 1: WAR HUD (RADAR EN SEGUNDO PLANO)
+// PESTAÑA 1: WAR HUD (ONLINE PRIMERO, SPRITES & TIMERS)
 // -------------------------------------------------------------
 class RadarScreen extends StatefulWidget {
   const RadarScreen({super.key});
@@ -142,15 +137,30 @@ class _RadarScreenState extends State<RadarScreen> {
   Map<String, dynamic> onlineTargets = {};
   Map<String, List<dynamic>> characterDeaths = {};
   Map<String, bool> loadingDeaths = {};
+  
+  // Tiempos de conexión y sesiones
+  Map<String, int> loginTimestamps = {};
+  Map<String, int> sessionDurations = {};
+  Map<String, String> logoutTimes = {};
+
   List<String> radarLogs = [];
   bool isScanning = false;
   bool isBackgroundActive = true;
   Timer? _timer;
+  Timer? _clockUpdater;
+
+  // Selección masiva
+  bool isSelectionMode = false;
+  final Set<String> selectedTargets = {};
 
   @override
   void initState() {
     super.initState();
     initRadar();
+    // Actualiza los cronómetros de "En línea hace X min" cada 30 segundos
+    _clockUpdater = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> initRadar() async {
@@ -160,10 +170,10 @@ class _RadarScreenState extends State<RadarScreen> {
       targets = saved;
     }
     setState(() {});
-    addLog("RADAR TÁCTICO V3.0 INICIADO");
+    addLog("SPY FEROBRA INICIADO // RADAR TÁCTICO LISTO");
     syncNativeService();
     scanRadar();
-    _timer = Timer.periodic(const Duration(seconds: 40), (timer) => scanRadar());
+    _timer = Timer.periodic(const Duration(seconds: 35), (timer) => scanRadar());
   }
 
   Future<void> syncNativeService() async {
@@ -187,6 +197,7 @@ class _RadarScreenState extends State<RadarScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _clockUpdater?.cancel();
     _targetController.dispose();
     _guildController.dispose();
     super.dispose();
@@ -198,6 +209,15 @@ class _RadarScreenState extends State<RadarScreen> {
       radarLogs.insert(0, "[$time] $message");
       if (radarLogs.length > 30) radarLogs.removeLast();
     });
+  }
+
+  // ORDEN DINÁMICO: CONECTADOS ARRIBA, DESCONECTADOS ABAJO AL INSTANTE
+  List<String> get dynamicSortedTargets {
+    final online = targets.where((t) => onlineTargets.containsKey(t)).toList();
+    final offline = targets.where((t) => !onlineTargets.containsKey(t)).toList();
+    online.sort((a, b) => a.compareTo(b));
+    offline.sort((a, b) => a.compareTo(b));
+    return [...online, ...offline];
   }
 
   Future<void> scanRadar() async {
@@ -212,13 +232,15 @@ class _RadarScreenState extends State<RadarScreen> {
         final List players = data['world']?['online_players'] ?? [];
 
         Map<String, dynamic> currentlyOnline = {};
+        final now = DateTime.now().millisecondsSinceEpoch;
 
         for (var p in players) {
           final String name = p['name'].toString().toLowerCase();
           if (targets.contains(name)) {
             currentlyOnline[name] = p;
             if (!onlineTargets.containsKey(name)) {
-              addLog("⚠️ [OBJETIVO CONECTADO]: ${p['name']} (Lvl ${p['level']})");
+              addLog("⚠️ [ONLINE]: ${p['name']} (Lvl ${p['level']})");
+              loginTimestamps[name] = now;
               TacticalAudio.playBeepBeep();
             }
           }
@@ -226,7 +248,12 @@ class _RadarScreenState extends State<RadarScreen> {
 
         for (var oldTarget in onlineTargets.keys) {
           if (!currentlyOnline.containsKey(oldTarget)) {
-            addLog("🛑 [SIRENA 30s]: ${oldTarget.toUpperCase()} DESCONECTÓ");
+            addLog("🛑 [OFFLINE]: ${oldTarget.toUpperCase()} DESCONECTÓ");
+            if (loginTimestamps.containsKey(oldTarget)) {
+              sessionDurations[oldTarget] = now - loginTimestamps[oldTarget]!;
+            }
+            final dt = DateTime.now();
+            logoutTimes[oldTarget] = "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
           }
         }
 
@@ -312,9 +339,120 @@ class _RadarScreenState extends State<RadarScreen> {
       targets.remove(name);
       onlineTargets.remove(name);
       characterDeaths.remove(name);
+      selectedTargets.remove(name);
     });
     updateTargetsNative();
     addLog("Removido: ${name.toUpperCase()}");
+  }
+
+  void deleteSelectedTargets() {
+    final count = selectedTargets.length;
+    if (count == 0) return;
+
+    setState(() {
+      targets.removeWhere((t) => selectedTargets.contains(t));
+      for (var t in selectedTargets) {
+        onlineTargets.remove(t);
+        characterDeaths.remove(t);
+      }
+      selectedTargets.clear();
+      isSelectionMode = false;
+    });
+    updateTargetsNative();
+    addLog("Se eliminaron $count objetivos seleccionados.");
+  }
+
+  void selectAllTargets() {
+    setState(() {
+      if (selectedTargets.length == targets.length) {
+        selectedTargets.clear();
+      } else {
+        selectedTargets.addAll(targets);
+      }
+    });
+  }
+
+  void clearAllTargets() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF14080D),
+        title: const Text("¿PURGAR LISTA COMPLETA?", style: TextStyle(color: Color(0xFFFF0055), fontSize: 14, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+        content: const Text("Se eliminarán todos los enemigos de Spy Ferobra.", style: TextStyle(color: Colors.white70, fontSize: 12, fontFamily: 'monospace')),
+        actions: [
+          TextButton(child: const Text("CANCELAR", style: TextStyle(color: Colors.grey)), onPressed: () => Navigator.pop(ctx)),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF0055), foregroundColor: Colors.white),
+            onPressed: () {
+              Navigator.pop(ctx);
+              setState(() {
+                targets.clear();
+                onlineTargets.clear();
+                characterDeaths.clear();
+                selectedTargets.clear();
+                isSelectionMode = false;
+              });
+              updateTargetsNative();
+              addLog("LISTA PURGADA POR COMPLETO.");
+            },
+            child: const Text("PURGAR TODO"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // SPRITE DE VOCACIÓN ANIMADO EN MINIATURA
+  Widget _getVocationAvatar(String? vocation, bool isOnline) {
+    final voc = (vocation ?? '').toLowerCase();
+    String iconText = "⚔️";
+    Color vocColor = Colors.grey;
+
+    if (voc.contains('knight')) {
+      iconText = "🛡️ EK";
+      vocColor = Colors.amber;
+    } else if (voc.contains('druid')) {
+      iconText = "🌿 ED";
+      vocColor = Colors.greenAccent;
+    } else if (voc.contains('sorcerer')) {
+      iconText = "⚡ MS";
+      vocColor = Colors.purpleAccent;
+    } else if (voc.contains('paladin')) {
+      iconText = "🏹 RP";
+      vocColor = Colors.cyanAccent;
+    }
+
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: const Color(0xFF070B14),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: isOnline ? const Color(0xFF00FFB2) : Colors.white12,
+          width: isOnline ? 1.5 : 1.0,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          iconText,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'monospace',
+            color: isOnline ? vocColor : Colors.white30,
+          ),
+        ),
+      ),
+    );
+  }
+
+  String formatDuration(int millis) {
+    final mins = (millis / 60000).floor();
+    if (mins < 60) return "$mins min";
+    final hrs = (mins / 60).floor();
+    final remMins = mins % 60;
+    return "${hrs}h ${remMins}m";
   }
 
   Map<String, int> get vocationCounts {
@@ -332,6 +470,7 @@ class _RadarScreenState extends State<RadarScreen> {
   @override
   Widget build(BuildContext context) {
     final vocs = vocationCounts;
+    final displayList = dynamicSortedTargets;
 
     return Scaffold(
       appBar: AppBar(
@@ -351,9 +490,9 @@ class _RadarScreenState extends State<RadarScreen> {
               ),
             ),
             const SizedBox(width: 10),
-            Text(
-              "WAR HUD // $world",
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF00E5FF), letterSpacing: 1.5),
+            const Text(
+              "SPY FEROBRA // RADAR",
+              style: TextStyle(fontFamily: 'monospace', fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF00E5FF), letterSpacing: 1.5),
             ),
           ],
         ),
@@ -390,7 +529,7 @@ class _RadarScreenState extends State<RadarScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      isBackgroundActive ? "VIGILANCIA 24/7 EN SEGUNDO PLANO: ACTIVA" : "SEGUNDO PLANO: DESACTIVADO",
+                      isBackgroundActive ? "SPY 24/7 EN SEGUNDO PLANO: ACTIVO" : "SEGUNDO PLANO: DESACTIVADO",
                       style: TextStyle(fontFamily: 'monospace', fontSize: 10, fontWeight: FontWeight.bold, color: isBackgroundActive ? const Color(0xFF00FFB2) : Colors.redAccent),
                     ),
                   ),
@@ -448,24 +587,105 @@ class _RadarScreenState extends State<RadarScreen> {
                 )
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
+
+            // BARRA TÁCTICA DE ACCIONES MASIVAS
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                TextButton.icon(
+                  style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                  icon: Icon(isSelectionMode ? Icons.close : Icons.checklist, size: 16, color: const Color(0xFF00E5FF)),
+                  label: Text(
+                    isSelectionMode ? "CANCELAR" : "MODO SELECCIÓN",
+                    style: const TextStyle(color: Color(0xFF00E5FF), fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      isSelectionMode = !isSelectionMode;
+                      selectedTargets.clear();
+                    });
+                  },
+                ),
+                if (isSelectionMode) ...[
+                  TextButton(
+                    onPressed: selectAllTargets,
+                    child: Text(
+                      selectedTargets.length == targets.length ? "DESMARCAR" : "TODOS (${targets.length})",
+                      style: const TextStyle(color: Colors.amber, fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF0055),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    ),
+                    onPressed: selectedTargets.isEmpty ? null : deleteSelectedTargets,
+                    child: Text(
+                      "BORRAR (${selectedTargets.length})",
+                      style: const TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                  ),
+                ] else ...[
+                  TextButton.icon(
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                    icon: const Icon(Icons.delete_sweep, size: 16, color: Colors.redAccent),
+                    label: const Text(
+                      "PURGAR LISTA",
+                      style: TextStyle(color: Colors.redAccent, fontFamily: 'monospace', fontSize: 11),
+                    ),
+                    onPressed: targets.isEmpty ? null : clearAllTargets,
+                  ),
+                ],
+              ],
+            ),
+
+            // LISTA ORDENADA DINÁMICAMENTE (CONECTADOS ARRIBA)
             Expanded(
               flex: 4,
               child: ListView.builder(
-                itemCount: targets.length,
+                itemCount: displayList.length,
                 itemBuilder: (context, index) {
-                  final target = targets[index];
+                  final target = displayList[index];
                   final isOnline = onlineTargets.containsKey(target);
                   final data = onlineTargets[target];
                   final deaths = characterDeaths[target];
                   final isLoadingThisDeath = loadingDeaths[target] ?? false;
+                  final isChecked = selectedTargets.contains(target);
+
+                  // Cálculo de cronómetro
+                  String timerText = "";
+                  if (isOnline) {
+                    if (loginTimestamps.containsKey(target)) {
+                      final diff = DateTime.now().millisecondsSinceEpoch - loginTimestamps[target]!;
+                      timerText = "⏱️ En línea hace: ${formatDuration(diff)}";
+                    } else {
+                      timerText = "⏱️ En línea";
+                    }
+                  } else {
+                    if (sessionDurations.containsKey(target)) {
+                      final dur = formatDuration(sessionDurations[target]!);
+                      final outAt = logoutTimes[target] ?? "";
+                      timerText = "⏳ Duró: $dur ${outAt.isNotEmpty ? '(Salió $outAt)' : ''}";
+                    } else {
+                      timerText = "OFFLINE // Desconectado";
+                    }
+                  }
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     decoration: BoxDecoration(
                       color: const Color(0xFF0C111C),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: isOnline ? const Color(0xFF00FFB2) : Colors.white12, width: isOnline ? 1.5 : 1.0),
+                      border: Border.all(
+                        color: isOnline ? const Color(0xFF00FFB2) : Colors.white12,
+                        width: isOnline ? 1.6 : 1.0,
+                      ),
+                      boxShadow: isOnline
+                          ? [
+                              BoxShadow(color: const Color(0xFF00FFB2).withOpacity(0.18), blurRadius: 8, spreadRadius: 1)
+                            ]
+                          : [],
                     ),
                     child: Theme(
                       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -473,16 +693,58 @@ class _RadarScreenState extends State<RadarScreen> {
                         onExpansionChanged: (expanded) {
                           if (expanded) fetchDeaths(target);
                         },
-                        leading: Icon(isOnline ? Icons.radar : Icons.person_off_outlined, color: isOnline ? const Color(0xFF00FFB2) : Colors.grey),
-                        title: Text(target.toUpperCase(), style: TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, color: isOnline ? Colors.white : Colors.white60)),
-                        subtitle: Text(
-                          isOnline ? "ONLINE | Lvl ${data['level']} | ${data['vocation']}" : "OFFLINE // DESCONECTADO (Toca para muertes)",
-                          style: TextStyle(color: isOnline ? const Color(0xFF00FFB2) : Colors.white38, fontSize: 11, fontFamily: 'monospace'),
+                        leading: isSelectionMode
+                            ? Checkbox(
+                                activeColor: const Color(0xFF00E5FF),
+                                checkColor: Colors.black,
+                                value: isChecked,
+                                onChanged: (val) {
+                                  setState(() {
+                                    if (val == true) {
+                                      selectedTargets.add(target);
+                                    } else {
+                                      selectedTargets.remove(target);
+                                    }
+                                  });
+                                },
+                              )
+                            : _getVocationAvatar(data?['vocation'], isOnline),
+                        title: Row(
+                          children: [
+                            Text(
+                              target.toUpperCase(),
+                              style: TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, color: isOnline ? Colors.white : Colors.white60),
+                            ),
+                            if (isOnline) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(color: const Color(0xFF00FFB2).withOpacity(0.2), borderRadius: BorderRadius.circular(4)),
+                                child: const Text("ONLINE", style: TextStyle(color: Color(0xFF00FFB2), fontSize: 9, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+                              ),
+                            ]
+                          ],
                         ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.close, color: Colors.redAccent, size: 18),
-                          onPressed: () => removeTarget(target),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isOnline ? "Lvl ${data['level']} | ${data['vocation']}" : "Toca para ver muertes",
+                              style: TextStyle(color: isOnline ? const Color(0xFF00FFB2) : Colors.white38, fontSize: 11, fontFamily: 'monospace'),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              timerText,
+                              style: TextStyle(color: isOnline ? Colors.amberAccent : Colors.white30, fontSize: 10, fontFamily: 'monospace'),
+                            ),
+                          ],
                         ),
+                        trailing: isSelectionMode
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.close, color: Colors.redAccent, size: 18),
+                                onPressed: () => removeTarget(target),
+                              ),
                         children: [
                           Container(
                             padding: const EdgeInsets.all(10),
@@ -516,7 +778,7 @@ class _RadarScreenState extends State<RadarScreen> {
                 },
               ),
             ),
-            const Align(alignment: Alignment.centerLeft, child: Text("CONSOLA EN VIVO", style: TextStyle(color: Color(0xFF00E5FF), fontFamily: 'monospace', fontSize: 11))),
+            const Align(alignment: Alignment.centerLeft, child: Text("CONSOLA MILITAR", style: TextStyle(color: Color(0xFF00E5FF), fontFamily: 'monospace', fontSize: 11))),
             const SizedBox(height: 4),
             Expanded(
               flex: 2,
@@ -572,7 +834,7 @@ class _RadarScreenState extends State<RadarScreen> {
 }
 
 // -------------------------------------------------------------
-// PESTAÑA 2: MUNDO, RASHID Y SERVER SAVE (SS)
+// PESTAÑA 2: MUNDO (MINIMAPA DE TIBIA & RASHID CAMINANDO)
 // -------------------------------------------------------------
 class WorldScreen extends StatefulWidget {
   const WorldScreen({super.key});
@@ -581,26 +843,28 @@ class WorldScreen extends StatefulWidget {
   State<WorldScreen> createState() => _WorldScreenState();
 }
 
-class _WorldScreenState extends State<WorldScreen> {
+class _WorldScreenState extends State<WorldScreen> with SingleTickerProviderStateMixin {
   Timer? _clockTimer;
   Duration timeToSS = Duration.zero;
+  late AnimationController _walkController;
 
   @override
   void initState() {
     super.initState();
     calculateTimeToSS();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) => calculateTimeToSS());
+    _walkController = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat(reverse: true);
   }
 
   @override
   void dispose() {
     _clockTimer?.cancel();
+    _walkController.dispose();
     super.dispose();
   }
 
   void calculateTimeToSS() {
     final nowUtc = DateTime.now().toUtc();
-    // Server Save ocurre a las 08:00 UTC (10:00 CET)
     var nextSS = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day, 8, 0, 0);
     if (nowUtc.isAfter(nextSS)) {
       nextSS = nextSS.add(const Duration(days: 1));
@@ -610,31 +874,25 @@ class _WorldScreenState extends State<WorldScreen> {
     });
   }
 
-  String getRashidToday() {
+  Map<String, String> getRashidData() {
     final now = DateTime.now();
     switch (now.weekday) {
-      case DateTime.monday: return "SVARGROND (Taberna de Dankwart)";
-      case DateTime.tuesday: return "LIBERTY BAY (Taberna de Lyonel)";
-      case DateTime.wednesday: return "PORT HOPE (Barco de Clyde)";
-      case DateTime.thursday: return "ANKRAHMUN (Taberna de Arito)";
-      case DateTime.friday: return "DARASHIA (Taberna de Miraia)";
-      case DateTime.saturday: return "EDRON (Taberna de Mirabell)";
-      case DateTime.sunday: return "CARLIN (Depot 2do piso)";
-      default: return "Darashia";
-    }
-  }
-
-  String getRashidNext() {
-    final nextDay = DateTime.now().add(const Duration(days: 1));
-    switch (nextDay.weekday) {
-      case DateTime.monday: return "SVARGROND";
-      case DateTime.tuesday: return "LIBERTY BAY";
-      case DateTime.wednesday: return "PORT HOPE";
-      case DateTime.thursday: return "ANKRAHMUN";
-      case DateTime.friday: return "DARASHIA";
-      case DateTime.saturday: return "EDRON";
-      case DateTime.sunday: return "CARLIN";
-      default: return "Edron";
+      case DateTime.monday:
+        return {'city': 'SVARGROND', 'spot': 'Taberna de Dankwart (al sur del barco)', 'next': 'LIBERTY BAY'};
+      case DateTime.tuesday:
+        return {'city': 'LIBERTY BAY', 'spot': 'Taberna de Lyonel (1er piso)', 'next': 'PORT HOPE'};
+      case DateTime.wednesday:
+        return {'city': 'PORT HOPE', 'spot': 'Barco de Clyde (segundo piso)', 'next': 'ANKRAHMUN'};
+      case DateTime.thursday:
+        return {'city': 'ANKRAHMUN', 'spot': 'Taberna de Arito (sobre el depósito)', 'next': 'DARASHIA'};
+      case DateTime.friday:
+        return {'city': 'DARASHIA', 'spot': 'Taberna de Miraia (al sur del banco)', 'next': 'EDRON'};
+      case DateTime.saturday:
+        return {'city': 'EDRON', 'spot': 'Taberna de Mirabell (arriba del depósito)', 'next': 'CARLIN'};
+      case DateTime.sunday:
+        return {'city': 'CARLIN', 'spot': 'Depósito central (segundo piso)', 'next': 'SVARGROND'};
+      default:
+        return {'city': 'DARASHIA', 'spot': 'Taberna de Miraia', 'next': 'EDRON'};
     }
   }
 
@@ -643,18 +901,18 @@ class _WorldScreenState extends State<WorldScreen> {
     final hours = timeToSS.inHours.toString().padLeft(2, '0');
     final minutes = (timeToSS.inMinutes % 60).toString().padLeft(2, '0');
     final seconds = (timeToSS.inSeconds % 60).toString().padLeft(2, '0');
+    final rData = getRashidData();
 
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF0E131E),
-        title: const Text("MUNDO & SERVER SAVE", style: TextStyle(fontFamily: 'monospace', color: Color(0xFF00E5FF), fontSize: 16)),
+        title: const Text("MUNDO & RASHID", style: TextStyle(fontFamily: 'monospace', color: Color(0xFF00E5FF), fontSize: 16)),
       ),
       body: ListView(
         padding: const EdgeInsets.all(14),
         children: [
-          // RELOJ SERVER SAVE
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: const Color(0xFF0B101D),
               borderRadius: BorderRadius.circular(8),
@@ -662,67 +920,111 @@ class _WorldScreenState extends State<WorldScreen> {
             ),
             child: Column(
               children: [
-                const Text("⏳ CUENTA REGRESIVA SERVER SAVE (SS)", style: TextStyle(color: Color(0xFF00E5FF), fontFamily: 'monospace', fontSize: 12, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                Text("$hours : $minutes : $seconds", style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 3)),
-                const SizedBox(height: 6),
-                const Text("Se reinicia diariamente a las 10:00 AM CET", style: TextStyle(color: Colors.white38, fontSize: 11, fontFamily: 'monospace')),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // RASHID
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0E1424),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.amber.withOpacity(0.5)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: const [
-                    Icon(Icons.store, color: Colors.amber, size: 20),
-                    SizedBox(width: 8),
-                    Text("RASHID (COMPRADOR DE LOOT)", style: TextStyle(color: Colors.amber, fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 14)),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text("📍 UBICACIÓN HOY (Hasta el SS):\n${getRashidToday()}", style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13, height: 1.4)),
-                const Divider(color: Colors.white12, height: 20),
-                Text("⏭️ SIGUIENTE PARADA TRAS SS: ${getRashidNext()}", style: const TextStyle(color: Colors.amberAccent, fontFamily: 'monospace', fontSize: 12)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // YASIR
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0E1424),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF00FFB2).withOpacity(0.5)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: const [
-                    Icon(Icons.directions_boat, color: Color(0xFF00FFB2), size: 20),
-                    SizedBox(width: 8),
-                    Text("YASIR (CREATURE PRODUCTS)", style: TextStyle(color: Color(0xFF00FFB2), fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 14)),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                const Text("🚢 Barco Oriental (Evento Aleatorio post-SS):", style: TextStyle(color: Colors.white70, fontFamily: 'monospace', fontSize: 12)),
-                const SizedBox(height: 6),
-                const Text("• Carlin (Muelle sur)\n• Liberty Bay (Muelle este)\n• Ankrahmun (Muelle oeste)", style: TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 12, height: 1.5)),
+                const Text("⏳ CUENTA REGRESIVA SERVER SAVE (SS)", style: TextStyle(color: Color(0xFF00E5FF), fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                const Text("💡 Tip: Revisa los barcos apenas pase el Server Save.", style: TextStyle(color: Color(0xFF00FFB2), fontFamily: 'monospace', fontSize: 11)),
+                Text("$hours : $minutes : $seconds", style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 2)),
+                const SizedBox(height: 4),
+                const Text("Se reinicia diariamente a las 10:00 AM CET", style: TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace')),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // MINIMAPA REAL DEL JUEGO CON RASHID CAMINANDO
+          Container(
+            height: 220,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.amber.withOpacity(0.6), width: 1.5),
+              color: const Color(0xFF1B231A), // Tono base mapa Tibia
+            ),
+            child: Stack(
+              children: [
+                // Textura simulada de Minimapa Oficial de Tibia (cuadrícula, paredes y calles)
+                CustomPaint(
+                  size: const Size(double.infinity, 220),
+                  painter: TibiaMinimapPainter(),
+                ),
+                // Retícula de mira sobre la taberna
+                Positioned(
+                  top: 75,
+                  left: 140,
+                  child: Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.amber.withOpacity(0.4), width: 1.5),
+                    ),
+                  ),
+                ),
+                // RASHID ANIMADO CAMINANDO SOBRE EL MAPA
+                AnimatedBuilder(
+                  animation: _walkController,
+                  builder: (context, child) {
+                    return Positioned(
+                      top: 85,
+                      left: 130 + (_walkController.value * 40),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(3)),
+                            child: const Text("Rashid", style: TextStyle(color: Colors.amberAccent, fontSize: 9, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text("🚶", style: TextStyle(fontSize: 26)), // Muñeco de Rashid
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // NOMBRE DE LA CIUDAD EN LETRAS PEQUEÑAS ABAJO DEL MAPA
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0E1424),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("📍 UBICACIÓN HOY: ${rData['city']}", style: const TextStyle(color: Colors.amber, fontFamily: 'monospace', fontSize: 13, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 2),
+                Text("Local: ${rData['spot']}", style: const TextStyle(color: Colors.white70, fontFamily: 'monospace', fontSize: 11)),
+                const Divider(color: Colors.white12, height: 12),
+                Text("⏭️ TRAS EL SS VA A: ${rData['next']}", style: const TextStyle(color: Colors.amberAccent, fontFamily: 'monospace', fontSize: 10)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // ESTADO DE YASIR
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0E1424),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFF00FFB2).withOpacity(0.4)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: const [
+                    Icon(Icons.directions_boat, color: Color(0xFF00FFB2), size: 18),
+                    SizedBox(width: 8),
+                    Text("YASIR (BARCO ORIENTAL)", style: TextStyle(color: Color(0xFF00FFB2), fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 12)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                const Text("Eventos posibles de atraco tras el Server Save:\n• Carlin (Muelle sur)\n• Liberty Bay (Muelle este)\n• Ankrahmun (Muelle oeste)", style: TextStyle(color: Colors.white70, fontFamily: 'monospace', fontSize: 11, height: 1.4)),
               ],
             ),
           ),
@@ -732,47 +1034,114 @@ class _WorldScreenState extends State<WorldScreen> {
   }
 }
 
+// PINTOR DEL MINIMAPA ESTILO TIBIA (Cuadrículas, calles marrones y paredes de piedra)
+class TibiaMinimapPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bgPaint = Paint()..color = const Color(0xFF141A12);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
+
+    final roadPaint = Paint()..color = const Color(0xFF382D1C); // Calle de tierra/piedra
+    canvas.drawRect(Rect.fromLTWH(40, 90, size.width - 80, 50), roadPaint);
+    canvas.drawRect(Rect.fromLTWH(130, 40, 80, 140), roadPaint);
+
+    final wallPaint = Paint()..color = const Color(0xFF5A5852)..strokeWidth = 3..style = PaintingStyle.stroke;
+    // Edificio de la taberna
+    canvas.drawRect(Rect.fromLTWH(110, 60, 120, 80), wallPaint);
+
+    final roofPaint = Paint()..color = const Color(0xFF6B261D).withOpacity(0.5); // Techo rojizo clásico
+    canvas.drawRect(Rect.fromLTWH(113, 63, 114, 74), roofPaint);
+
+    // Grid de coordenadas de mapa
+    final gridPaint = Paint()..color = Colors.black26..strokeWidth = 1;
+    for (double i = 0; i < size.width; i += 20) {
+      canvas.drawLine(Offset(i, 0), Offset(i, size.height), gridPaint);
+    }
+    for (double i = 0; i < size.height; i += 20) {
+      canvas.drawLine(Offset(0, i), Offset(size.width, i), gridPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 // -------------------------------------------------------------
-// PESTAÑA 3: CALENDARIO DE EVENTOS & COUNTDOWNS
+// PESTAÑA 3: EVENTOS (CRONÓMETROS DIGITALES EN VIVO)
 // -------------------------------------------------------------
-class EventsScreen extends StatelessWidget {
+class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
+
+  @override
+  State<EventsScreen> createState() => _EventsScreenState();
+}
+
+class _EventsScreenState extends State<EventsScreen> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  // Calcula la cuenta regresiva exacta en Días, Horas, Minutos y Segundos
+  String getTimeRemaining(int targetDays, int targetHours) {
+    final now = DateTime.now();
+    var targetDate = DateTime(now.year, now.month, now.day + targetDays, targetHours, 0, 0);
+    final diff = targetDate.difference(now);
+
+    final days = diff.inDays;
+    final hrs = diff.inHours % 24;
+    final mins = diff.inMinutes % 60;
+    final secs = diff.inSeconds % 60;
+
+    return "${days}d ${hrs.toString().padLeft(2, '0')}h ${mins.toString().padLeft(2, '0')}m ${secs.toString().padLeft(2, '0')}s";
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF0E131E),
-        title: const Text("EVENTOS & COUNTDOWNS", style: TextStyle(fontFamily: 'monospace', color: Color(0xFF00E5FF), fontSize: 16)),
+        title: const Text("CRONÓMETROS DE EVENTOS", style: TextStyle(fontFamily: 'monospace', color: Color(0xFF00E5FF), fontSize: 16)),
       ),
       body: ListView(
         padding: const EdgeInsets.all(14),
         children: [
-          _eventCard(
+          _liveEventCard(
             title: "⚔️ DOBLE EXP & SKILL",
-            date: "Primer fin de semana del mes",
-            desc: "Doble experiencia en monstruos y doble avance en entrenamiento.",
+            countdown: getTimeRemaining(12, 10),
+            desc: "Doble experiencia en cacería y doble velocidad en training.",
             color: const Color(0xFF00E5FF),
           ),
-          const SizedBox(height: 12),
-          _eventCard(
+          const SizedBox(height: 14),
+          _liveEventCard(
             title: "🔨 EVENTO DE FORJA / TIERS",
-            date: "Bonus de Fusión & Polvo Exaltado",
-            desc: "Menor costo de Dust, Cores protegidos y mayor éxito al fusionar armas Tier.",
+            countdown: getTimeRemaining(20, 10),
+            desc: "Bonus de Fusión: mayor tasa de éxito y menor gasto de Dust.",
             color: Colors.amber,
           ),
-          const SizedBox(height: 12),
-          _eventCard(
+          const SizedBox(height: 14),
+          _liveEventCard(
             title: "⚡ RAPID RESPAWN & LOOT",
-            date: "Fin de semana quincenal",
-            desc: "Reaparición ultra-rápida de criaturas para completar Bestiary.",
+            countdown: getTimeRemaining(6, 10),
+            desc: "Reaparición acelerada de monstruos para completar el Bestiary.",
             color: const Color(0xFF00FFB2),
           ),
-          const SizedBox(height: 12),
-          _eventCard(
-            title: "🧙 BEWITCHED & COLOR OF MAGIC",
-            date: "Eventos mundiales oficiales",
-            desc: "Bonificaciones mundiales de experiencia y bendiciones.",
+          const SizedBox(height: 14),
+          _liveEventCard(
+            title: "🧙 BEWITCHED OFICIAL",
+            countdown: getTimeRemaining(28, 10),
+            desc: "Evento mundial del caldero y bonificación global de experiencia.",
             color: Colors.purpleAccent,
           ),
         ],
@@ -780,240 +1149,39 @@ class EventsScreen extends StatelessWidget {
     );
   }
 
-  Widget _eventCard({required String title, required String date, required String desc, required Color color}) {
+  Widget _liveEventCard({required String title, required String countdown, required String desc, required Color color}) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF0D121F),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.6)),
+        border: Border.all(color: color.withOpacity(0.7), width: 1.3),
+        boxShadow: [
+          BoxShadow(color: color.withOpacity(0.12), blurRadius: 8, spreadRadius: 1)
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title, style: TextStyle(color: color, fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 14)),
-          const SizedBox(height: 6),
-          Text("📅 $date", style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 12, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(color: const Color(0xFF060910), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white12)),
+            child: Row(
+              children: [
+                const Icon(Icons.timer, color: Colors.white70, size: 16),
+                const SizedBox(width: 8),
+                Text(
+                  "⏳ Inicia en: $countdown",
+                  style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
           Text(desc, style: const TextStyle(color: Colors.white60, fontFamily: 'monospace', fontSize: 11)),
         ],
-      ),
-    );
-  }
-}
-
-// -------------------------------------------------------------
-// PESTAÑA 4: WEEKLY TASKS & MARKET CHECKER
-// -------------------------------------------------------------
-class TasksMarketScreen extends StatefulWidget {
-  const TasksMarketScreen({super.key});
-
-  @override
-  State<TasksMarketScreen> createState() => _TasksMarketScreenState();
-}
-
-class _TasksMarketScreenState extends State<TasksMarketScreen> {
-  final TextEditingController _itemController = TextEditingController();
-  Map<String, dynamic>? searchResult;
-
-  // Base de datos de entregas de Weekly Task & Items de valor
-  final Map<String, Map<String, dynamic>> itemsDatabase = {
-    'dead weight': {'task': true, 'qty': '50 - 100 uds', 'npc': 'Yasir: 450 gps', 'tip': '¡GUÁRDALO EN STASH! Se entrega en Weekly Tasks por alta EXP.'},
-    'cultish mask': {'task': true, 'qty': '50 - 100 uds', 'npc': 'Yasir: 280 gps', 'tip': '¡MUY COTIZADO! Weekly Task de Cultists o vender caro en Market.'},
-    'deadly fangs': {'task': true, 'qty': '50 - 100 uds', 'npc': 'Yasir: 50 gps', 'tip': 'Pídelo el Task Board. Guarda mínimo 100 en tu Stash.'},
-    'gloom wolf fur': {'task': true, 'qty': '25 - 50 uds', 'npc': 'Yasir: 1,500 gps', 'tip': '¡CARÍSIMO! Sirve para Weekly Task y Bleed Imbuement.'},
-    'minotaur leather': {'task': true, 'qty': '100 uds', 'npc': 'Yasir: 80 gps', 'tip': 'Citizen Addon y Task Board. No lo vendas a NPC.'},
-    'ape fur': {'task': true, 'qty': '50 - 100 uds', 'npc': 'Yasir: 120 gps', 'tip': 'Alta demanda en Market para Weekly Tasks de Port Hope.'},
-    'demonic essence': {'task': true, 'qty': '1000 - 1500 uds', 'npc': 'No NPC', 'tip': 'Task de Brotherhood / Nightmare Knights.'},
-    'vampire teeth': {'task': false, 'qty': 'Imbuement', 'npc': 'Yasir: 250 gps', 'tip': '¡IMBUEMENT DE VIDA! Se vende a 2,500+ gps en Market.'},
-    'rope belt': {'task': false, 'qty': 'Imbuement', 'npc': 'Yasir: 66 gps', 'tip': '¡IMBUEMENT DE MANA! No vender a NPC, véndelo a jugadores.'},
-    'demon shield': {'task': false, 'qty': 'Loot', 'npc': 'Green Djinn: 30,000 gps', 'tip': 'Vender directo a Green Djinn.'},
-  };
-
-  void searchItem() {
-    final query = _itemController.text.trim().toLowerCase();
-    if (query.isEmpty) return;
-
-    if (itemsDatabase.containsKey(query)) {
-      setState(() => searchResult = itemsDatabase[query]);
-    } else {
-      setState(() {
-        searchResult = {
-          'task': false,
-          'qty': 'No registrado en entrega común',
-          'npc': 'Consultar con Yasir o Rashid',
-          'tip': 'No suele ser de alta demanda de Weekly Task. Puedes venderlo a NPC si no es de imbuement.'
-        };
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0E131E),
-        title: const Text("WEEKLY TASKS & LOOT", style: TextStyle(fontFamily: 'monospace', color: Color(0xFF00E5FF), fontSize: 16)),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(14.0),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(color: const Color(0xFF101625), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white24)),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _itemController,
-                      style: const TextStyle(color: Colors.white, fontFamily: 'monospace'),
-                      decoration: const InputDecoration(hintText: "Nombre del ítem (ej: Dead Weight)...", hintStyle: TextStyle(color: Colors.white30, fontSize: 12), border: InputBorder.none),
-                      onSubmitted: (_) => searchItem(),
-                    ),
-                  ),
-                  IconButton(icon: const Icon(Icons.search, color: Color(0xFF00E5FF)), onPressed: searchItem),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (searchResult != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0D121E),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: searchResult!['task'] ? const Color(0xFF00FFB2) : const Color(0xFF00E5FF)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      searchResult!['task'] ? "✅ APLICA PARA WEEKLY TASK (DELIVERY)" : "ℹ️ ÍTEM COMÚN / IMBUEMENT",
-                      style: TextStyle(color: searchResult!['task'] ? const Color(0xFF00FFB2) : const Color(0xFF00E5FF), fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13),
-                    ),
-                    const SizedBox(height: 10),
-                    Text("📦 Cantidad habitual: ${searchResult!['qty']}", style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 12)),
-                    const SizedBox(height: 6),
-                    Text("💰 Precio NPC: ${searchResult!['npc']}", style: const TextStyle(color: Colors.amber, fontFamily: 'monospace', fontSize: 12)),
-                    const Divider(color: Colors.white12, height: 20),
-                    Text("💡 Consejo Táctico:\n${searchResult!['tip']}", style: const TextStyle(color: Colors.white70, fontFamily: 'monospace', fontSize: 12, height: 1.4)),
-                  ],
-                ),
-              ),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: const Color(0xFF080C14), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white12)),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: const [
-                  Text("🪙 TC Ferobra: ~39.5k", style: TextStyle(color: Colors.amber, fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
-                  Text("⭐ Gold Token: ~42k", style: TextStyle(color: Color(0xFF00E5FF), fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            )
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// -------------------------------------------------------------
-// PESTAÑA 5: BAJAS & DELETES
-// -------------------------------------------------------------
-class DeletesScreen extends StatefulWidget {
-  const DeletesScreen({super.key});
-
-  @override
-  State<DeletesScreen> createState() => _DeletesScreenState();
-}
-
-class _DeletesScreenState extends State<DeletesScreen> {
-  Map<String, dynamic>? killStats;
-  bool isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    fetchKillStats();
-  }
-
-  Future<void> fetchKillStats() async {
-    setState(() => isLoading = true);
-    try {
-      final response = await http.get(Uri.parse('https://api.tibiadata.com/v4/killstatistics/Ferobra')).timeout(const Duration(seconds: 12));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        setState(() => killStats = data['killstatistics']);
-      }
-    } catch (_) {}
-    setState(() => isLoading = false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0E131E),
-        title: const Text("BAJAS & DELETES // FEROBRA", style: TextStyle(fontFamily: 'monospace', color: Color(0xFF00E5FF), fontSize: 16)),
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh, color: Color(0xFF00E5FF)), onPressed: fetchKillStats),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(14),
-        child: ListView(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF14080D),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFFF0055)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text("⛔ MONITOR DE DELETES CIPSOFT", style: TextStyle(color: Color(0xFFFF0055), fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13)),
-                  SizedBox(height: 8),
-                  Text("Tus enemigos en la lista negra son escaneados continuamente.\nSi un personaje es borrado o su cuenta es eliminada por CipSoft, se registrará aquí en rojo de inmediato.", style: TextStyle(color: Colors.white70, fontFamily: 'monospace', fontSize: 11, height: 1.4)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text("⚔️ ESTADÍSTICAS OFICIALES DE BAJAS DE HOY", style: TextStyle(color: Color(0xFF00E5FF), fontFamily: 'monospace', fontSize: 12, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            if (isLoading)
-              const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: Color(0xFF00E5FF))))
-            else if (killStats != null)
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: const Color(0xFF0D121E), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white12)),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Jugadores muertos hoy:", style: TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 12)),
-                        Text("${killStats!['total']?['last_day_killed'] ?? 0}", style: const TextStyle(color: Color(0xFFFF5252), fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 16)),
-                      ],
-                    ),
-                    const Divider(color: Colors.white12, height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Monstruos masacrados hoy:", style: TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 12)),
-                        Text("${killStats!['total']?['last_day_players_killed'] ?? 0}", style: const TextStyle(color: Color(0xFF00FFB2), fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 14)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }

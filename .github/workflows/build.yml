@@ -1,4 +1,4 @@
-name: Build Tibia Tactical APK
+name: Build Spy Ferobra APK
 
 on:
   push:
@@ -18,15 +18,16 @@ jobs:
 
       - name: Generar Proyecto y Compilar
         run: |
-          flutter create --org com.tactical.tibia --project-name tibia_radar app
+          flutter create --org com.tactical.tibia --project-name spy_ferobra app
           cp main.dart app/lib/main.dart
-          cp RadarService.kt app/android/app/src/main/kotlin/com/tactical/tibia/tibia_radar/RadarService.kt
-          cp MainActivity.kt app/android/app/src/main/kotlin/com/tactical/tibia/tibia_radar/MainActivity.kt
+          cp RadarService.kt app/android/app/src/main/kotlin/com/tactical/tibia/spy_ferobra/RadarService.kt
+          cp MainActivity.kt app/android/app/src/main/kotlin/com/tactical/tibia/spy_ferobra/MainActivity.kt
           
-          # Permisos Android para segundo plano, voz y notificaciones
+          # Inyectar permisos de Android
           sed -i 's/<application/    <uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.VIBRATE"\/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"\/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"\/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"\/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"\/>\n    <application/' app/android/app/src/main/AndroidManifest.xml
           
-          # Inyectar servicio nativo
+          # Cambiar nombre a "Spy Ferobra" e inyectar servicio
+          sed -i 's/android:label=".*"/android:label="Spy Ferobra"/' app/android/app/src/main/AndroidManifest.xml
           sed -i 's/<\/application>/    <service android:name=".RadarService" android:foregroundServiceType="dataSync" android:exported="false" \/>\n    <\/application>/' app/android/app/src/main/AndroidManifest.xml
 
           cd app
@@ -37,5 +38,5 @@ jobs:
       - name: Subir APK Terminado
         uses: actions/upload-artifact@v4
         with:
-          name: Tibia-Radar-Ferobra-APK
+          name: Spy-Ferobra-APK
           path: app/build/app/outputs/flutter-apk/app-release.apk

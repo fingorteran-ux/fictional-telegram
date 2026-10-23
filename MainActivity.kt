@@ -1,4 +1,4 @@
-package com.tactical.tibia.tibia_radar
+package com.tactical.tibia.spy_ferobra
 
 import android.content.Context
 import android.content.Intent
@@ -13,7 +13,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Si tocas la notificación, apaga la sirena de inmediato
+        // Si tocas la notificación, se apaga de inmediato
         val intent = Intent(this, RadarService::class.java).apply {
             action = RadarService.ACTION_STOP_SIREN
         }
