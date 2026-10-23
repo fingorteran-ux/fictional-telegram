@@ -152,7 +152,6 @@ class RadarService : Service() {
             }
 
             if (!isFirstRun) {
-                // ENTRADA: 2 pitidos y aviso normal
                 for (target in targetList) {
                     if (currentOnlineMap.containsKey(target) && !previousOnline.contains(target)) {
                         val info = currentOnlineMap[target] ?: ""
@@ -160,7 +159,6 @@ class RadarService : Service() {
                     }
                 }
 
-                // SALIDA: SIRENA MILITAR DE 60 SEGUNDOS Y NOMBRE EN GRANDE
                 for (target in targetList) {
                     if (!currentOnlineMap.containsKey(target) && previousOnline.contains(target)) {
                         triggerOneMinuteSirenAlert(target)
@@ -306,7 +304,7 @@ class RadarService : Service() {
             sirenTrack?.stop()
             sirenTrack?.release()
             sirenTrack = null
-        } catch (_) {}
+        } catch (e: Exception) {}
     }
 
     private fun wakeUpScreen() {
@@ -317,7 +315,7 @@ class RadarService : Service() {
                 "tibia_radar:siren_wake"
             )
             wl.acquire(10000)
-        } catch (_) {}
+        } catch (e: Exception) {}
     }
 
     override fun onDestroy() {
