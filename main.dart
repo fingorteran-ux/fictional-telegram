@@ -12,25 +12,24 @@ void main() {
   runApp(const TibiaRadarApp());
 }
 
-// GENERADOR DE SONIDOS EN MEMORIA (WAV PURO)
 class TacticalAudio {
   static final AudioPlayer _player = AudioPlayer();
   static bool soundEnabled = true;
 
   static Uint8List _createWav(int sampleRate, List<double> samples) {
     final byteData = ByteData(44 + samples.length * 2);
-    byteData.setUint32(0, 0x52494646, Endian.big); // RIFF
+    byteData.setUint32(0, 0x52494646, Endian.big);
     byteData.setUint32(4, 36 + samples.length * 2, Endian.little);
-    byteData.setUint32(8, 0x57415645, Endian.big); // WAVE
-    byteData.setUint32(12, 0x666d7420, Endian.big); // fmt 
+    byteData.setUint32(8, 0x57415645, Endian.big);
+    byteData.setUint32(12, 0x666d7420, Endian.big);
     byteData.setUint32(16, 16, Endian.little);
-    byteData.setUint16(20, 1, Endian.little); // PCM
-    byteData.setUint16(22, 1, Endian.little); // Mono
+    byteData.setUint16(20, 1, Endian.little);
+    byteData.setUint16(22, 1, Endian.little);
     byteData.setUint32(24, sampleRate, Endian.little);
     byteData.setUint32(28, sampleRate * 2, Endian.little);
     byteData.setUint16(32, 2, Endian.little);
     byteData.setUint16(34, 16, Endian.little);
-    byteData.setUint32(36, 0x64617461, Endian.big); // data
+    byteData.setUint32(36, 0x64617461, Endian.big);
     byteData.setUint32(40, samples.length * 2, Endian.little);
 
     for (int i = 0; i < samples.length; i++) {
@@ -40,52 +39,21 @@ class TacticalAudio {
     return byteData.buffer.asUint8List();
   }
 
-  // DOS PITIDOS TÁCTICOS: "PI - PI"
   static Future<void> playBeepBeep() async {
     if (!soundEnabled) return;
     try {
       HapticFeedback.vibrate();
       const sampleRate = 22050;
       final samples = <double>[];
-      
-      // Pitido 1 (90ms - 1050 Hz)
       for (int i = 0; i < (sampleRate * 0.09).toInt(); i++) {
         samples.add(math.sin(2 * math.pi * 1050 * i / sampleRate));
       }
-      // Silencio (60ms)
       for (int i = 0; i < (sampleRate * 0.06).toInt(); i++) {
         samples.add(0.0);
       }
-      // Pitido 2 (110ms - 1250 Hz)
       for (int i = 0; i < (sampleRate * 0.11).toInt(); i++) {
         samples.add(math.sin(2 * math.pi * 1250 * i / sampleRate));
       }
-
-      final bytes = _createWav(sampleRate, samples);
-      await _player.stop();
-      await _player.play(BytesSource(bytes));
-    } catch (_) {}
-  }
-
-  // SIRENA MILITAR: "WIU WIU WIU WIU"
-  static Future<void> playSiren() async {
-    if (!soundEnabled) return;
-    try {
-      HapticFeedback.heavyImpact();
-      const sampleRate = 22050;
-      final samples = <double>[];
-      const durationSeconds = 1.6;
-      final totalSamples = (sampleRate * durationSeconds).toInt();
-
-      double phase = 0.0;
-      for (int i = 0; i < totalSamples; i++) {
-        final t = i / sampleRate;
-        // Modulación senoidal entre 450Hz y 950Hz
-        final freq = 700 + 250 * math.sin(2 * math.pi * 3.5 * t);
-        phase += 2 * math.pi * freq / sampleRate;
-        samples.add(0.8 * math.sin(phase));
-      }
-
       final bytes = _createWav(sampleRate, samples);
       await _player.stop();
       await _player.play(BytesSource(bytes));
@@ -119,6 +87,7 @@ class RadarScreen extends StatefulWidget {
 }
 
 class _RadarScreenState extends State<RadarScreen> {
+  static const platform = MethodChannel('com.tactical.tibia/radar');
   final String world = 'Ferobra';
   List<String> targets = ['fingor', 'edwing ek'];
   final TextEditingController _targetController = TextEditingController();
@@ -130,15 +99,44 @@ class _RadarScreenState extends State<RadarScreen> {
   
   List<String> radarLogs = [];
   bool isScanning = false;
+  bool isBackgroundActive = true;
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    loadTargets();
-    addLog("SISTEMA RADAR TÁCTICO V2.0 EN LÍNEA.");
+    initRadar();
+  }
+
+  Future<void> initRadar() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getStringList('tibia_targets');
+    if (saved != null && saved.isNotEmpty) {
+      targets = saved;
+    }
+    setState(() {});
+    addLog("RADAR MILITAR LISTO // VIGILANCIA EN SEGUNDO PLANO");
+    syncNativeService();
     scanRadar();
     _timer = Timer.periodic(const Duration(seconds: 40), (timer) => scanRadar());
+  }
+
+  Future<void> syncNativeService() async {
+    try {
+      if (isBackgroundActive) {
+        await platform.invokeMethod('startRadarService', {'targets': targets});
+      } else {
+        await platform.invokeMethod('stopRadarService');
+      }
+    } catch (_) {}
+  }
+
+  Future<void> updateTargetsNative() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('tibia_targets', targets);
+    try {
+      await platform.invokeMethod('updateTargets', {'targets': targets});
+    } catch (_) {}
   }
 
   @override
@@ -147,19 +145,6 @@ class _RadarScreenState extends State<RadarScreen> {
     _targetController.dispose();
     _guildController.dispose();
     super.dispose();
-  }
-
-  Future<void> loadTargets() async {
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getStringList('tibia_targets');
-    if (saved != null && saved.isNotEmpty) {
-      setState(() => targets = saved);
-    }
-  }
-
-  Future<void> saveTargets() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('tibia_targets', targets);
   }
 
   void addLog(String message) {
@@ -172,8 +157,6 @@ class _RadarScreenState extends State<RadarScreen> {
 
   Future<void> scanRadar() async {
     setState(() => isScanning = true);
-    addLog("Escaneando satélite en Ferobra...");
-
     try {
       final response = await http.get(
         Uri.parse('https://api.tibiadata.com/v4/world/$world'),
@@ -191,64 +174,54 @@ class _RadarScreenState extends State<RadarScreen> {
             currentlyOnline[name] = p;
             if (!onlineTargets.containsKey(name)) {
               addLog("⚠️ [OBJETIVO DETECTADO]: ${p['name']} (Lvl ${p['level']})");
-              TacticalAudio.playBeepBeep(); // 🔊 PI-PI
+              TacticalAudio.playBeepBeep();
             }
           }
         }
 
         for (var oldTarget in onlineTargets.keys) {
           if (!currentlyOnline.containsKey(oldTarget)) {
-            addLog("🛑 [SIRENA / TARGET LOST]: ${oldTarget.toUpperCase()} DESCONECTÓ");
-            TacticalAudio.playSiren(); // 🚨 WIU-WIU
+            addLog("🛑 [SIRENA DESCONEXIÓN]: ${oldTarget.toUpperCase()}");
           }
         }
 
         setState(() {
           onlineTargets = currentlyOnline;
         });
-        addLog("Escaneo OK: ${players.length} jugadores en Ferobra.");
+        addLog("Escaneo: ${players.length} jugadores en Ferobra.");
       }
-    } catch (e) {
-      addLog("ERROR: Falla de conexión con TibiaData.");
+    } catch (_) {
+      addLog("Reintentando satélite...");
     } finally {
       setState(() => isScanning = false);
     }
   }
 
-  // DESPLEGAR MUERTES DESDE LA API DE PERSONAJES
   Future<void> fetchDeaths(String charName) async {
     if (characterDeaths.containsKey(charName)) return;
-
     setState(() => loadingDeaths[charName] = true);
     try {
-      final formattedName = Uri.encodeComponent(charName);
       final response = await http.get(
-        Uri.parse('https://api.tibiadata.com/v4/character/$formattedName'),
+        Uri.parse('https://api.tibiadata.com/v4/character/${Uri.encodeComponent(charName)}'),
       ).timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final List deaths = data['character']?['deaths'] ?? [];
-        setState(() {
-          characterDeaths[charName] = deaths;
-        });
+        setState(() => characterDeaths[charName] = deaths);
       }
     } catch (_) {
-      setState(() {
-        characterDeaths[charName] = [];
-      });
+      setState(() => characterDeaths[charName] = []);
     } finally {
       setState(() => loadingDeaths[charName] = false);
     }
   }
 
-  // IMPORTAR GUILD ENTERA
   Future<void> importGuild() async {
     final guildName = _guildController.text.trim();
     if (guildName.isEmpty) return;
-
     Navigator.pop(context);
-    addLog("Consultando miembros de Guild '$guildName'...");
+    addLog("Consultando guild '$guildName'...");
 
     try {
       final response = await http.get(
@@ -267,15 +240,13 @@ class _RadarScreenState extends State<RadarScreen> {
             count++;
           }
         }
-        await saveTargets();
+        await updateTargetsNative();
         setState(() {});
-        addLog("GUILD CARGADA: +$count nuevos objetivos.");
+        addLog("GUILD CARGADA: +$count objetivos.");
         scanRadar();
-      } else {
-        addLog("ERROR: Guild no encontrada.");
       }
     } catch (_) {
-      addLog("ERROR: Falla al consultar guild.");
+      addLog("ERROR importando guild.");
     }
     _guildController.clear();
   }
@@ -284,8 +255,8 @@ class _RadarScreenState extends State<RadarScreen> {
     final text = _targetController.text.trim().toLowerCase();
     if (text.isNotEmpty && !targets.contains(text)) {
       setState(() => targets.add(text));
-      saveTargets();
-      addLog("Añadido a lista negra: ${text.toUpperCase()}");
+      updateTargetsNative();
+      addLog("Añadido: ${text.toUpperCase()}");
       _targetController.clear();
       scanRadar();
     }
@@ -297,11 +268,10 @@ class _RadarScreenState extends State<RadarScreen> {
       onlineTargets.remove(name);
       characterDeaths.remove(name);
     });
-    saveTargets();
-    addLog("Objetivo removido: ${name.toUpperCase()}");
+    updateTargetsNative();
+    addLog("Removido: ${name.toUpperCase()}");
   }
 
-  // CONTADOR DE VOCACIONES
   Map<String, int> get vocationCounts {
     int ek = 0, ed = 0, ms = 0, rp = 0;
     for (var info in onlineTargets.values) {
@@ -331,11 +301,7 @@ class _RadarScreenState extends State<RadarScreen> {
                 shape: BoxShape.circle,
                 color: isScanning ? const Color(0xFF00FFB2) : const Color(0xFF00E5FF),
                 boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF00E5FF).withOpacity(0.8),
-                    blurRadius: 8,
-                    spreadRadius: 2,
-                  )
+                  BoxShadow(color: const Color(0xFF00E5FF).withOpacity(0.8), blurRadius: 8, spreadRadius: 2)
                 ],
               ),
             ),
@@ -360,13 +326,6 @@ class _RadarScreenState extends State<RadarScreen> {
             ),
             onPressed: () {
               setState(() => TacticalAudio.soundEnabled = !TacticalAudio.soundEnabled);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(TacticalAudio.soundEnabled ? "ALERTAS AUDIBLES ACTIVADAS" : "MODO SILENCIOSO"),
-                  duration: const Duration(seconds: 1),
-                  backgroundColor: const Color(0xFF00E5FF),
-                ),
-              );
             },
           ),
           IconButton(
@@ -379,13 +338,53 @@ class _RadarScreenState extends State<RadarScreen> {
         padding: const EdgeInsets.all(14.0),
         child: Column(
           children: [
-            // BARRA TÁCTICA DE VOCACIONES ACTIVAS
             Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFF0A0F1A),
+                color: const Color(0xFF0A101C),
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4)),
+                border: Border.all(
+                  color: isBackgroundActive ? const Color(0xFF00FFB2) : Colors.redAccent,
+                  width: 1.2,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isBackgroundActive ? Icons.security : Icons.security_update_warning,
+                    color: isBackgroundActive ? const Color(0xFF00FFB2) : Colors.redAccent,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      isBackgroundActive ? "VIGILANCIA 24/7 EN SEGUNDO PLANO: ACTIVA" : "SEGUNDO PLANO: DESACTIVADO",
+                      style: TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: isBackgroundActive ? const Color(0xFF00FFB2) : Colors.redAccent,
+                      ),
+                    ),
+                  ),
+                  Switch(
+                    value: isBackgroundActive,
+                    activeColor: const Color(0xFF00FFB2),
+                    onChanged: (val) {
+                      setState(() => isBackgroundActive = val);
+                      syncNativeService();
+                    },
+                  )
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF080C14),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -397,9 +396,7 @@ class _RadarScreenState extends State<RadarScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-
-            // PANEL DE ACCIONES (BUSCAR + BOTÓN GUILD)
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
@@ -422,7 +419,7 @@ class _RadarScreenState extends State<RadarScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00E5FF),
@@ -439,14 +436,11 @@ class _RadarScreenState extends State<RadarScreen> {
                     foregroundColor: const Color(0xFF00E5FF),
                   ),
                   icon: const Icon(Icons.shield, size: 20),
-                  tooltip: "Importar Guild",
                   onPressed: () => _showGuildDialog(),
                 )
               ],
             ),
-            const SizedBox(height: 14),
-
-            // LISTA DE OBJETIVOS CON DESPLIEGUE DE MUERTES
+            const SizedBox(height: 12),
             Expanded(
               flex: 4,
               child: ListView.builder(
@@ -560,14 +554,9 @@ class _RadarScreenState extends State<RadarScreen> {
                 },
               ),
             ),
-
-            // CONSOLA TÁCTICA
             const Align(
               alignment: Alignment.centerLeft,
-              child: Text(
-                "CONSOLA EN VIVO",
-                style: TextStyle(color: Color(0xFF00E5FF), fontFamily: 'monospace', fontSize: 11),
-              ),
+              child: Text("CONSOLA EN VIVO", style: TextStyle(color: Color(0xFF00E5FF), fontFamily: 'monospace', fontSize: 11)),
             ),
             const SizedBox(height: 4),
             Expanded(
@@ -585,11 +574,7 @@ class _RadarScreenState extends State<RadarScreen> {
                   itemBuilder: (context, index) {
                     return Text(
                       radarLogs[index],
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 10,
-                        color: Color(0xFF80DEEA),
-                      ),
+                      style: const TextStyle(fontFamily: 'monospace', fontSize: 10, color: Color(0xFF80DEEA)),
                     );
                   },
                 ),
@@ -604,14 +589,8 @@ class _RadarScreenState extends State<RadarScreen> {
   Widget _vocBadge(String voc, int count, Color color) {
     return Row(
       children: [
-        Text(
-          "$voc: ",
-          style: TextStyle(color: color, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
-        ),
-        Text(
-          "$count",
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
-        ),
+        Text("$voc: ", style: TextStyle(color: color, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+        Text("$count", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
       ],
     );
   }

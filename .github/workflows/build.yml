@@ -20,9 +20,16 @@ jobs:
         run: |
           flutter create --org com.tactical.tibia --project-name tibia_radar app
           cp main.dart app/lib/main.dart
+          cp RadarService.kt app/android/app/src/main/kotlin/com/tactical/tibia/tibia_radar/RadarService.kt
+          cp MainActivity.kt app/android/app/src/main/kotlin/com/tactical/tibia/tibia_radar/MainActivity.kt
+          
+          # Inyectar permisos de Android para segundo plano y notificaciones
+          sed -i 's/<application/    <uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.VIBRATE"\/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"\/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"\/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"\/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"\/>\n    <application/' app/android/app/src/main/AndroidManifest.xml
+          
+          # Inyectar servicio en el application tag
+          sed -i 's/<\/application>/    <service android:name=".RadarService" android:foregroundServiceType="dataSync" android:exported="false" \/>\n    <\/application>/' app/android/app/src/main/AndroidManifest.xml
+
           cd app
-          # Activar permisos en Android
-          sed -i 's/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android">/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android">\n    <uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.VIBRATE"\/>/' android/app/src/main/AndroidManifest.xml
           sed -i 's/minSdkVersion .*/minSdkVersion 21/' android/app/build.gradle 2>/dev/null || true
           flutter pub add http audioplayers shared_preferences
           flutter build apk --release
