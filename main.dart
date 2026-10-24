@@ -94,7 +94,6 @@ String getCityMinimapUrl(String city) {
   return 'https://www.tibiawiki.com.br/images/f/f4/Map_thais.jpg';
 }
 
-// FORMATO DE TIEMPO TRANSCURRIDO (HACE X MIN, HORAS, DÍAS)
 String formatElapsedTime(int millis) {
   final seconds = (millis / 1000).floor();
   if (seconds < 60) return "${seconds}s";
@@ -106,6 +105,110 @@ String formatElapsedTime(int millis) {
   final days = (hrs / 24).floor();
   final remHrs = hrs % 24;
   return "${days}d ${remHrs}h";
+}
+
+// -------------------------------------------------------------
+// CARGADOR INTELIGENTE DE MONSTRUOS (RESUELVE LAS X ROJAS)
+// -------------------------------------------------------------
+final Map<String, Uint8List> _monsterMemoryCache = {};
+
+class DeathMonsterWidget extends StatefulWidget {
+  final String killerName;
+  const DeathMonsterWidget({super.key, required this.killerName});
+
+  @override
+  State<DeathMonsterWidget> createState() => _DeathMonsterWidgetState();
+}
+
+class _DeathMonsterWidgetState extends State<DeathMonsterWidget> {
+  Uint8List? imageBytes;
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    loadMonsterImage();
+  }
+
+  Future<void> loadMonsterImage() async {
+    final clean = widget.killerName
+        .replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '')
+        .trim()
+        .split(' ')
+        .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}' : '')
+        .join('_');
+
+    if (_monsterMemoryCache.containsKey(clean)) {
+      if (mounted) {
+        setState(() {
+          imageBytes = _monsterMemoryCache[clean];
+          loading = false;
+        });
+      }
+      return;
+    }
+
+    try {
+      // 1. Consulta la API de Fandom para obtener la URL directa sin redirecciones
+      final apiUri = Uri.parse(
+          'https://tibia.fandom.com/api.php?action=query&titles=File:$clean.gif&prop=imageinfo&iiprop=url&format=json');
+      final apiRes = await http.get(apiUri, headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36'
+      }).timeout(const Duration(seconds: 6));
+
+      if (apiRes.statusCode == 200) {
+        final data = json.decode(apiRes.body);
+        final pages = data['query']?['pages'] as Map?;
+        if (pages != null && pages.isNotEmpty) {
+          final page = pages.values.first;
+          final imgUrl = page['imageinfo']?[0]?['url'];
+          if (imgUrl != null) {
+            final imgRes = await http.get(Uri.parse(imgUrl), headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36'
+            }).timeout(const Duration(seconds: 8));
+
+            if (imgRes.statusCode == 200 && imgRes.bodyBytes.isNotEmpty) {
+              _monsterMemoryCache[clean] = imgRes.bodyBytes;
+              if (mounted) {
+                setState(() {
+                  imageBytes = imgRes.bodyBytes;
+                  loading = false;
+                });
+              }
+              return;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    // Fallback si no hay conexión o no existe
+    if (mounted) setState(() => loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00FFB2)),
+      );
+    }
+
+    if (imageBytes != null) {
+      return Image.memory(
+        imageBytes!,
+        width: 48,
+        height: 48,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.none,
+      );
+    }
+
+    // Si es un monstruo desconocido, icono táctico limpio en vez de X roja
+    return const Icon(Icons.shield, color: Colors.white24, size: 28);
+  }
 }
 
 // -------------------------------------------------------------
@@ -312,7 +415,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     initRadar();
     calculateTimeToSS();
-    // Actualizador cada segundo para que los cronómetros de tiempo online/offline avancen en vivo
     _clockUpdater = Timer.periodic(const Duration(seconds: 1), (_) {
       calculateTimeToSS();
       if (mounted) setState(() {});
@@ -699,6 +801,7 @@ class _HomeScreenState extends State<HomeScreen> {
     syncNativeService();
   }
 
+  // TRICOLOR OFICIAL: head 79, body 86, legs 94, feet 94
   Widget _getVocationWalkingSprite(String? vocation, bool isOnline) {
     final voc = (vocation ?? '').toLowerCase();
     int looktype = 128;
@@ -753,7 +856,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // Noticia superior
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           color: const Color(0xFF161B24),
@@ -872,9 +974,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // -------------------------------------------------------------
-        // LISTA DE PERSONAJES (CON TIEMPO ONLINE / OFFLINE RESTAURADO)
-        // -------------------------------------------------------------
+        // Lista de Personajes con Cronómetros en Vivo
         if (displayList.isEmpty)
           Container(
             margin: const EdgeInsets.all(14),
@@ -896,7 +996,6 @@ class _HomeScreenState extends State<HomeScreen> {
             final level = isOnline ? (onlinePlayersData[key]['level'] ?? 0) : (full['level'] ?? 0);
             final vocation = isOnline ? (onlinePlayersData[key]['vocation'] ?? '') : (full['vocation'] ?? 'Cargando...');
 
-            // CÁLCULO DEL TIEMPO EN LÍNEA U OFFLINE EN VIVO
             String timerText = "";
             if (isOnline) {
               if (loginTimestamps.containsKey(key)) {
@@ -956,15 +1055,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
                 ),
-                // SUBTÍTULO COMPLETO CON NIVEL, VOCACIÓN Y CRONÓMETRO DE TIEMPO
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 2),
-                    Text(
-                      "Nivel $level – $vocation",
-                      style: const TextStyle(color: Colors.white60, fontSize: 12),
-                    ),
+                    Text("Nivel $level – $vocation", style: const TextStyle(color: Colors.white60, fontSize: 12)),
                     const SizedBox(height: 2),
                     Text(
                       timerText,
@@ -1057,10 +1152,7 @@ class _HomeScreenState extends State<HomeScreen> {
         // Tarjeta de Rashid Compacta
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF161A22),
-            borderRadius: BorderRadius.circular(4),
-          ),
+          decoration: BoxDecoration(color: const Color(0xFF161A22), borderRadius: BorderRadius.circular(4)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1087,9 +1179,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           fit: BoxFit.cover,
                           alignment: Alignment.center,
                           filterQuality: FilterQuality.none,
-                          headers: const {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36',
-                          },
+                          headers: const {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36'},
                           errorBuilder: (_, __, ___) => Container(color: const Color(0xFFC7A762)),
                         ),
                       ),
@@ -1146,7 +1236,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // -------------------------------------------------------------
-// PANTALLA DETALLE COMPLETO (CON "ÚLTIMA VEZ ONLINE" RESTAURADO)
+// PANTALLA DETALLE: MUERTES CON MONSTRUOS RESUELTOS SIN X
 // -------------------------------------------------------------
 class CharacterDetailScreen extends StatefulWidget {
   final TrackTarget target;
@@ -1215,44 +1305,6 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
   }
 
-  Widget _buildDeathMonsterImage(String killerName) {
-    final cleanCip = killerName
-        .replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '')
-        .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')
-        .toLowerCase();
-
-    final cleanWiki = killerName
-        .replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '')
-        .trim()
-        .split(' ')
-        .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}' : '')
-        .join('_');
-
-    return Image.network(
-      "https://tibia.fandom.com/wiki/Special:FilePath/$cleanWiki.gif",
-      width: 48,
-      height: 48,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.none,
-      headers: const {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36',
-      },
-      errorBuilder: (_, __, ___) => Image.network(
-        "https://static.tibia.com/images/global/content/creatures/$cleanCip.gif",
-        width: 48,
-        height: 48,
-        fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => Image.network(
-          "https://static.tibia.com/images/global/content/creatures/demon.gif",
-          width: 44,
-          height: 44,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => const Icon(Icons.dangerous, color: Colors.redAccent, size: 28),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final raw = widget.fullData['raw'] ?? {};
@@ -1263,7 +1315,6 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     final deaths = (widget.fullData['deaths'] as List? ?? []);
     final guild = (widget.fullData['guild'] as Map? ?? {});
 
-    // Texto de "Última vez online" idéntico a Tibia Live (ej: "Hace 4 minutos" o "Online")
     String lastOnlineDisplay = "Desconectado";
     if (widget.isOnline) {
       lastOnlineDisplay = "Online";
@@ -1336,11 +1387,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           Container(
             height: 150,
             width: double.infinity,
-            decoration: BoxDecoration(
-              color: const Color(0xFF16253D),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.white12),
-            ),
+            decoration: BoxDecoration(color: const Color(0xFF16253D), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white12)),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: Image.network(
@@ -1348,9 +1395,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                 fit: BoxFit.cover,
                 alignment: Alignment.center,
                 filterQuality: FilterQuality.none,
-                headers: const {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36',
-                },
+                headers: const {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36'},
                 errorBuilder: (_, __, ___) => const Center(
                   child: Icon(Icons.location_city, color: Color(0xFF00FFB2), size: 36),
                 ),
@@ -1371,7 +1416,6 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
             children: [
               _infoTile("Estado de la cuenta", accountStatus),
               const SizedBox(width: 8),
-              // CUARTO CUADRO: "ÚLTIMA VEZ ONLINE" CON SU TIEMPO DINÁMICO IDÉNTICO A TIBIA LIVE
               _infoTile("Última vez online", lastOnlineDisplay, isOnlineColor: widget.isOnline),
             ],
           ),
@@ -1391,7 +1435,9 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
             ),
           const SizedBox(height: 10),
 
-          // Sección Muertes
+          // -------------------------------------------------------------
+          // HISTORIAL DE MUERTES: CON MONSTRUOS EN MEMORIA (ADIÓS X ROJA)
+          // -------------------------------------------------------------
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: const Color(0xFF161A22), borderRadius: BorderRadius.circular(4)),
@@ -1442,11 +1488,12 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                                   ],
                                 ),
                               ),
+                              // MONSTRUO CARGADO POR API DIRECTA (SIN LA X ROJA)
                               if (!isPkMass)
                                 SizedBox(
                                   width: 48,
                                   height: 48,
-                                  child: _buildDeathMonsterImage(firstKillerName),
+                                  child: DeathMonsterWidget(killerName: firstKillerName),
                                 ),
                             ],
                           ),
