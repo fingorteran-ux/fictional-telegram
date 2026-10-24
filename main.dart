@@ -94,6 +94,20 @@ String getCityMinimapUrl(String city) {
   return 'https://www.tibiawiki.com.br/images/f/f4/Map_thais.jpg';
 }
 
+// FORMATO DE TIEMPO TRANSCURRIDO (HACE X MIN, HORAS, DÍAS)
+String formatElapsedTime(int millis) {
+  final seconds = (millis / 1000).floor();
+  if (seconds < 60) return "${seconds}s";
+  final mins = (seconds / 60).floor();
+  if (mins < 60) return "$mins min";
+  final hrs = (mins / 60).floor();
+  final remMins = mins % 60;
+  if (hrs < 24) return "${hrs}h ${remMins}m";
+  final days = (hrs / 24).floor();
+  final remHrs = hrs % 24;
+  return "${days}d ${remHrs}h";
+}
+
 // -------------------------------------------------------------
 // APP ROOT
 // -------------------------------------------------------------
@@ -281,7 +295,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, bool> muteDeathMap = {};
   Map<String, String> characterNotes = {};
 
-  // URLs oficiales de CipSoft que cargan 100% en Venezuela sin proxy
   String boostedCreatureName = "Rustheap Golem";
   String boostedCreatureImg = "https://static.tibia.com/images/global/content/creatures/rustheapgolem.gif";
   String boostedBossName = "The Diamond Blossom";
@@ -299,6 +312,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     initRadar();
     calculateTimeToSS();
+    // Actualizador cada segundo para que los cronómetros de tiempo online/offline avancen en vivo
     _clockUpdater = Timer.periodic(const Duration(seconds: 1), (_) {
       calculateTimeToSS();
       if (mounted) setState(() {});
@@ -685,10 +699,6 @@ class _HomeScreenState extends State<HomeScreen> {
     syncNativeService();
   }
 
-  // -------------------------------------------------------------
-  // COLORES EXACTOS SOLICITADOS:
-  // head: amarillo (79) | primary: azul (86) | secondary: rojo (94) | detail: rojo (94)
-  // -------------------------------------------------------------
   Widget _getVocationWalkingSprite(String? vocation, bool isOnline) {
     final voc = (vocation ?? '').toLowerCase();
     int looktype = 128;
@@ -736,8 +746,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final displayList = filteredTargets;
     final rData = getRashidData();
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
 
-    // RASHID CON TURBANTE VERDE ORIGINAL AUTÉNTICO (addons=2)
     const rashidOriginalWalkingUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=146&addons=2&head=78&body=106&legs=58&feet=76&direction=3";
 
     return ListView(
@@ -862,7 +872,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // Lista de Personajes
+        // -------------------------------------------------------------
+        // LISTA DE PERSONAJES (CON TIEMPO ONLINE / OFFLINE RESTAURADO)
+        // -------------------------------------------------------------
         if (displayList.isEmpty)
           Container(
             margin: const EdgeInsets.all(14),
@@ -883,6 +895,24 @@ class _HomeScreenState extends State<HomeScreen> {
             final full = characterFullData[key] ?? {};
             final level = isOnline ? (onlinePlayersData[key]['level'] ?? 0) : (full['level'] ?? 0);
             final vocation = isOnline ? (onlinePlayersData[key]['vocation'] ?? '') : (full['vocation'] ?? 'Cargando...');
+
+            // CÁLCULO DEL TIEMPO EN LÍNEA U OFFLINE EN VIVO
+            String timerText = "";
+            if (isOnline) {
+              if (loginTimestamps.containsKey(key)) {
+                final diff = nowMs - loginTimestamps[key]!;
+                timerText = "En línea: hace ${formatElapsedTime(diff)}";
+              } else {
+                timerText = "En línea";
+              }
+            } else {
+              if (logoutTimestamps.containsKey(key)) {
+                final diff = nowMs - logoutTimestamps[key]!;
+                timerText = "Offline hace: ${formatElapsedTime(diff)}";
+              } else {
+                timerText = "Desconectado";
+              }
+            }
 
             final bottomLineColor = target.type == 'enemigo'
                 ? const Color(0xFFFF5252)
@@ -907,6 +937,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         fullData: full,
                         isOnline: isOnline,
                         onlineData: onlinePlayersData[key],
+                        lastLogoutMs: logoutTimestamps[key],
                         onNotificationConfigure: () => showIndividualNotificationsDialog(target),
                       ),
                     ),
@@ -925,9 +956,26 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
                 ),
-                subtitle: Text(
-                  "Nivel $level – $vocation",
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                // SUBTÍTULO COMPLETO CON NIVEL, VOCACIÓN Y CRONÓMETRO DE TIEMPO
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 2),
+                    Text(
+                      "Nivel $level – $vocation",
+                      style: const TextStyle(color: Colors.white60, fontSize: 12),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      timerText,
+                      style: TextStyle(
+                        color: isOnline ? const Color(0xFF00FFB2) : Colors.white38,
+                        fontSize: 10,
+                        fontFamily: 'monospace',
+                        fontWeight: isOnline ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ],
                 ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -948,9 +996,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         const SizedBox(height: 12),
 
-        // -------------------------------------------------------------
-        // BOOSTED CREATURE & BOSS (DIRECTO DE CIPSOFT OFICIAL)
-        // -------------------------------------------------------------
+        // Boosted Creature & Boss
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
@@ -1008,9 +1054,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         const SizedBox(height: 14),
 
-        // -------------------------------------------------------------
-        // TARJETA DE RASHID COMPACTA (CON RASHID ORIGINAL EN TURBANTE)
-        // -------------------------------------------------------------
+        // Tarjeta de Rashid Compacta
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
@@ -1032,7 +1076,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Stack(
                   children: [
                     Positioned.fill(child: Container(color: const Color(0xFF264C8A))),
-                    // Minimapa de la ciudad
                     Positioned(
                       left: 0,
                       top: 0,
@@ -1051,7 +1094,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
-                    // Rashid Original Caminando con turbante (Looktype 146, addons 2)
                     Positioned(
                       right: 25,
                       top: 12,
@@ -1104,13 +1146,14 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // -------------------------------------------------------------
-// PANTALLA DETALLE: MONSTRUOS REALES EN LAS MUERTES
+// PANTALLA DETALLE COMPLETO (CON "ÚLTIMA VEZ ONLINE" RESTAURADO)
 // -------------------------------------------------------------
 class CharacterDetailScreen extends StatefulWidget {
   final TrackTarget target;
   final Map<String, dynamic> fullData;
   final bool isOnline;
   final dynamic onlineData;
+  final int? lastLogoutMs;
   final VoidCallback onNotificationConfigure;
 
   const CharacterDetailScreen({
@@ -1119,6 +1162,7 @@ class CharacterDetailScreen extends StatefulWidget {
     required this.fullData,
     required this.isOnline,
     this.onlineData,
+    this.lastLogoutMs,
     required this.onNotificationConfigure,
   });
 
@@ -1171,7 +1215,6 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
   }
 
-  // MONSTRUO REAL DE LA MUERTE (SIN USAR WSRV NI PROXIES BLOQUEADOS)
   Widget _buildDeathMonsterImage(String killerName) {
     final cleanCip = killerName
         .replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '')
@@ -1185,9 +1228,6 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
         .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}' : '')
         .join('_');
 
-    // Intento 1: Fandom directo con cabecera de navegador
-    // Intento 2: CipSoft CDN oficial directo
-    // Intento 3: Demon oficial
     return Image.network(
       "https://tibia.fandom.com/wiki/Special:FilePath/$cleanWiki.gif",
       width: 48,
@@ -1223,6 +1263,25 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     final deaths = (widget.fullData['deaths'] as List? ?? []);
     final guild = (widget.fullData['guild'] as Map? ?? {});
 
+    // Texto de "Última vez online" idéntico a Tibia Live (ej: "Hace 4 minutos" o "Online")
+    String lastOnlineDisplay = "Desconectado";
+    if (widget.isOnline) {
+      lastOnlineDisplay = "Online";
+    } else {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (widget.lastLogoutMs != null) {
+        lastOnlineDisplay = "Hace ${formatElapsedTime(now - widget.lastLogoutMs!)}";
+      } else {
+        final lastLoginStr = raw['last_login'] ?? '';
+        if (lastLoginStr.isNotEmpty) {
+          try {
+            final parsed = DateTime.parse(lastLoginStr).millisecondsSinceEpoch;
+            lastOnlineDisplay = "Hace ${formatElapsedTime(now - parsed)}";
+          } catch (_) {}
+        }
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Información del personaje", style: TextStyle(fontSize: 15)),
@@ -1244,7 +1303,6 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          // Muñeco con los colores exactos: head 79, body 86, legs 94, feet 94
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: const Color(0xFF161A22), borderRadius: BorderRadius.circular(4)),
@@ -1313,7 +1371,8 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
             children: [
               _infoTile("Estado de la cuenta", accountStatus),
               const SizedBox(width: 8),
-              _infoTile("Estado", widget.isOnline ? "Online" : "Desconectado", isOnlineColor: widget.isOnline),
+              // CUARTO CUADRO: "ÚLTIMA VEZ ONLINE" CON SU TIEMPO DINÁMICO IDÉNTICO A TIBIA LIVE
+              _infoTile("Última vez online", lastOnlineDisplay, isOnlineColor: widget.isOnline),
             ],
           ),
           const SizedBox(height: 10),
@@ -1332,9 +1391,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
             ),
           const SizedBox(height: 10),
 
-          // -------------------------------------------------------------
-          // HISTORIAL DE MUERTES (EL MONSTRUO REAL EN VEZ DEL ESCUDO)
-          // -------------------------------------------------------------
+          // Sección Muertes
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: const Color(0xFF161A22), borderRadius: BorderRadius.circular(4)),
@@ -1385,7 +1442,6 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                                   ],
                                 ),
                               ),
-                              // AQUÍ CARGA EL MONSTRUO REAL SIN ESCUDO NARANJA
                               if (!isPkMass)
                                 SizedBox(
                                   width: 48,
