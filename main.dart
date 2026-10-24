@@ -281,8 +281,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, bool> muteDeathMap = {};
   Map<String, String> characterNotes = {};
 
+  // URLs oficiales de CipSoft que cargan 100% en Venezuela sin proxy
   String boostedCreatureName = "Rustheap Golem";
+  String boostedCreatureImg = "https://static.tibia.com/images/global/content/creatures/rustheapgolem.gif";
   String boostedBossName = "The Diamond Blossom";
+  String boostedBossImg = "https://static.tibia.com/images/global/content/bosses/thediamondblossom.gif";
 
   Duration timeToSS = Duration.zero;
 
@@ -370,6 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (b != null && mounted) {
           setState(() {
             boostedCreatureName = b['name'] ?? 'Rustheap Golem';
+            boostedCreatureImg = b['image_url'] ?? 'https://static.tibia.com/images/global/content/creatures/rustheapgolem.gif';
           });
         }
       }
@@ -382,6 +386,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (b != null && mounted) {
           setState(() {
             boostedBossName = b['name'] ?? 'The Diamond Blossom';
+            boostedBossImg = b['image_url'] ?? 'https://static.tibia.com/images/global/content/bosses/thediamondblossom.gif';
           });
         }
       }
@@ -680,7 +685,10 @@ class _HomeScreenState extends State<HomeScreen> {
     syncNativeService();
   }
 
-  // TRICOLOR EXACTO: ARRIBA AMARILLO, MEDIO AZUL, ABAJO ROJO
+  // -------------------------------------------------------------
+  // COLORES EXACTOS SOLICITADOS:
+  // head: amarillo (79) | primary: azul (86) | secondary: rojo (94) | detail: rojo (94)
+  // -------------------------------------------------------------
   Widget _getVocationWalkingSprite(String? vocation, bool isOnline) {
     final voc = (vocation ?? '').toLowerCase();
     int looktype = 128;
@@ -695,10 +703,6 @@ class _HomeScreenState extends State<HomeScreen> {
       looktype = 144;
     }
 
-    // head=79 (Arriba Amarillo)
-    // body=86 (En el medio Azul)
-    // legs=94 (Debajo de último Rojo)
-    // feet=94 (Rojo)
     final animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=$looktype&addons=3&head=79&body=86&legs=94&feet=94&direction=3";
 
     return Opacity(
@@ -710,29 +714,6 @@ class _HomeScreenState extends State<HomeScreen> {
         fit: BoxFit.contain,
         filterQuality: FilterQuality.none,
         errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white24, size: 36),
-      ),
-    );
-  }
-
-  // BOSSES Y CRIATURAS EN MOVIMIENTO REAL (SIN BLOQUEOS)
-  Widget _buildLiveAnimatedCreature(String creatureName) {
-    final clean = creatureName
-        .replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '')
-        .trim()
-        .split(' ')
-        .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}' : '')
-        .join('_');
-
-    final unblockedUrl = "https://wsrv.nl/?url=tibia.fandom.com/wiki/Special:FilePath/$clean.gif&n=-1";
-
-    return Image.network(
-      unblockedUrl,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.none,
-      errorBuilder: (_, __, ___) => Image.network(
-        "https://wsrv.nl/?url=tibia.fandom.com/wiki/Special:FilePath/Demon.gif&n=-1",
-        fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => const Icon(Icons.shield, color: Colors.orangeAccent, size: 32),
       ),
     );
   }
@@ -756,7 +737,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final displayList = filteredTargets;
     final rData = getRashidData();
 
-    const rashidOriginalWalkingUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=146&addons=0&head=78&body=106&legs=58&feet=76&direction=3";
+    // RASHID CON TURBANTE VERDE ORIGINAL AUTÉNTICO (addons=2)
+    const rashidOriginalWalkingUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=146&addons=2&head=78&body=106&legs=58&feet=76&direction=3";
 
     return ListView(
       padding: EdgeInsets.zero,
@@ -966,7 +948,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
         const SizedBox(height: 12),
 
-        // Boosted Creature & Boss animados en vivo
+        // -------------------------------------------------------------
+        // BOOSTED CREATURE & BOSS (DIRECTO DE CIPSOFT OFICIAL)
+        // -------------------------------------------------------------
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
@@ -981,7 +965,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 6),
                       SizedBox(
                         height: 52,
-                        child: _buildLiveAnimatedCreature(boostedCreatureName),
+                        child: Image.network(
+                          boostedCreatureImg,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.none,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.pest_control, color: Colors.white30, size: 32),
+                        ),
                       ),
                       const SizedBox(height: 6),
                       Text(boostedCreatureName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
@@ -1000,7 +989,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 6),
                       SizedBox(
                         height: 52,
-                        child: _buildLiveAnimatedCreature(boostedBossName),
+                        child: Image.network(
+                          boostedBossImg,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.none,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.shield, color: Colors.white30, size: 32),
+                        ),
                       ),
                       const SizedBox(height: 6),
                       Text(boostedBossName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
@@ -1014,7 +1008,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
         const SizedBox(height: 14),
 
-        // Tarjeta de Rashid Compacta
+        // -------------------------------------------------------------
+        // TARJETA DE RASHID COMPACTA (CON RASHID ORIGINAL EN TURBANTE)
+        // -------------------------------------------------------------
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
@@ -1036,6 +1032,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Stack(
                   children: [
                     Positioned.fill(child: Container(color: const Color(0xFF264C8A))),
+                    // Minimapa de la ciudad
                     Positioned(
                       left: 0,
                       top: 0,
@@ -1054,6 +1051,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
+                    // Rashid Original Caminando con turbante (Looktype 146, addons 2)
                     Positioned(
                       right: 25,
                       top: 12,
@@ -1106,7 +1104,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // -------------------------------------------------------------
-// PANTALLA DETALLE: MONSTRUOS ANIMADOS EN VEZ DE LA X
+// PANTALLA DETALLE: MONSTRUOS REALES EN LAS MUERTES
 // -------------------------------------------------------------
 class CharacterDetailScreen extends StatefulWidget {
   final TrackTarget target;
@@ -1173,29 +1171,44 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
   }
 
-  // MONSTRUO ANIMADO EXACTO EN VEZ DE LA X
+  // MONSTRUO REAL DE LA MUERTE (SIN USAR WSRV NI PROXIES BLOQUEADOS)
   Widget _buildDeathMonsterImage(String killerName) {
-    final cleanName = killerName
+    final cleanCip = killerName
+        .replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '')
+        .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')
+        .toLowerCase();
+
+    final cleanWiki = killerName
         .replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '')
         .trim()
         .split(' ')
         .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}' : '')
         .join('_');
 
-    final unblockedUrl = "https://wsrv.nl/?url=tibia.fandom.com/wiki/Special:FilePath/$cleanName.gif&n=-1";
-
+    // Intento 1: Fandom directo con cabecera de navegador
+    // Intento 2: CipSoft CDN oficial directo
+    // Intento 3: Demon oficial
     return Image.network(
-      unblockedUrl,
+      "https://tibia.fandom.com/wiki/Special:FilePath/$cleanWiki.gif",
       width: 48,
       height: 48,
       fit: BoxFit.contain,
       filterQuality: FilterQuality.none,
+      headers: const {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36',
+      },
       errorBuilder: (_, __, ___) => Image.network(
-        "https://wsrv.nl/?url=tibia.fandom.com/wiki/Special:FilePath/Demon.gif&n=-1",
+        "https://static.tibia.com/images/global/content/creatures/$cleanCip.gif",
         width: 48,
         height: 48,
         fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => const Icon(Icons.shield, color: Colors.orangeAccent, size: 28),
+        errorBuilder: (_, __, ___) => Image.network(
+          "https://static.tibia.com/images/global/content/creatures/demon.gif",
+          width: 44,
+          height: 44,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => const Icon(Icons.dangerous, color: Colors.redAccent, size: 28),
+        ),
       ),
     );
   }
@@ -1231,6 +1244,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
+          // Muñeco con los colores exactos: head 79, body 86, legs 94, feet 94
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: const Color(0xFF161A22), borderRadius: BorderRadius.circular(4)),
@@ -1319,7 +1333,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           const SizedBox(height: 10),
 
           // -------------------------------------------------------------
-          // HISTORIAL DE MUERTES: CON MONSTRUO ANIMADO DONDE ANTES SALÍA LA X
+          // HISTORIAL DE MUERTES (EL MONSTRUO REAL EN VEZ DEL ESCUDO)
           // -------------------------------------------------------------
           Container(
             padding: const EdgeInsets.all(12),
@@ -1371,7 +1385,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                                   ],
                                 ),
                               ),
-                              // AQUÍ SALÍA LA X -> AHORA SALE EL MONSTRUO ANIMADO REAL
+                              // AQUÍ CARGA EL MONSTRUO REAL SIN ESCUDO NARANJA
                               if (!isPkMass)
                                 SizedBox(
                                   width: 48,
