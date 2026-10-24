@@ -62,6 +62,39 @@ class TacticalAudio {
 }
 
 // -------------------------------------------------------------
+// HELPER GLOBAL: MINIMAPAS REALES DE CADA CIUDAD DE TIBIA
+// -------------------------------------------------------------
+String getCityMinimapUrl(String city) {
+  final clean = city.trim().toLowerCase();
+  if (clean.contains('thais')) {
+    return 'https://www.tibiawiki.com.br/images/f/f4/Map_thais.jpg';
+  } else if (clean.contains('venore')) {
+    return 'https://www.tibiawiki.com.br/images/b/b4/Map_venore.jpg';
+  } else if (clean.contains('darashia') || clean.contains('darach')) {
+    return 'https://www.tibiawiki.com.br/images/7/75/Map_darashia.jpg';
+  } else if (clean.contains('carlin')) {
+    return 'https://www.tibiawiki.com.br/images/c/c2/Map_Carlin.jpg';
+  } else if (clean.contains('edron')) {
+    return 'https://www.tibiawiki.com.br/images/b/be/Map_edron.jpg';
+  } else if (clean.contains('ankrahmun')) {
+    return 'https://www.tibiawiki.com.br/images/9/9d/Map_Ankrahmun.png';
+  } else if (clean.contains('svargrond')) {
+    return 'https://www.tibiawiki.com.br/images/1/1a/Map_Svargrond.jpg';
+  } else if (clean.contains('port hope')) {
+    return 'https://www.tibiawiki.com.br/images/5/52/Map_Port_Hope.jpg';
+  } else if (clean.contains('kazordoon')) {
+    return 'https://www.tibiawiki.com.br/images/e/e0/Map_Kazordoon.jpg';
+  } else if (clean.contains('yalahar')) {
+    return 'https://www.tibiawiki.com.br/images/4/43/Map_yalahar.jpg';
+  } else if (clean.contains('liberty bay')) {
+    return 'https://www.tibiawiki.com.br/images/0/05/Map_liberty_bay.jpg';
+  } else if (clean.contains('ab\'dendriel')) {
+    return 'https://www.tibiawiki.com.br/images/8/87/Map_ab%27dendriel.jpg';
+  }
+  return 'https://www.tibiawiki.com.br/images/f/f4/Map_thais.jpg';
+}
+
+// -------------------------------------------------------------
 // APP ROOT
 // -------------------------------------------------------------
 class SpyFerobraApp extends StatelessWidget {
@@ -104,7 +137,7 @@ class TrackTarget {
 }
 
 // -------------------------------------------------------------
-// CONTENEDOR CON DRAWER LATERAL
+// CONTENEDOR PRINCIPAL CON MENÚ LATERAL
 // -------------------------------------------------------------
 class MainDrawerScreen extends StatefulWidget {
   const MainDrawerScreen({super.key});
@@ -170,13 +203,13 @@ class _MainDrawerScreenState extends State<MainDrawerScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text("SPY FEROBRA", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                          Text("CERO LÍMITES // ANIMACIONES ON", style: TextStyle(color: Color(0xFF00FFB2), fontSize: 10, fontWeight: FontWeight.bold)),
+                          Text("MINIMAPAS REALES // MULTI-MUNDO", style: TextStyle(color: Color(0xFF00FFB2), fontSize: 10, fontWeight: FontWeight.bold)),
                         ],
                       )
                     ],
                   ),
                   const SizedBox(height: 10),
-                  const Text("Monstruos, bosses y personajes animados en vivo", style: TextStyle(color: Colors.white54, fontSize: 11)),
+                  const Text("Rastrea cualquier personaje con su minimapa real", style: TextStyle(color: Colors.white54, fontSize: 11)),
                 ],
               ),
             ),
@@ -478,7 +511,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (targets.any((t) => t.name.toLowerCase() == text.toLowerCase())) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Este personaje ya está en tu lista de rastreo")),
+        const SnackBar(content: Text("Este personaje ya está en tu lista")),
       );
       return;
     }
@@ -539,22 +572,20 @@ class _HomeScreenState extends State<HomeScreen> {
     syncNativeService();
   }
 
-  // MUÑECOS EN MOVIMIENTO CON UNIFORME AMARILLO, AZUL Y ROJO (TRICOLOR)
   Widget _getVocationWalkingSprite(String? vocation, bool isOnline) {
     final voc = (vocation ?? '').toLowerCase();
     int looktype = 128;
 
     if (voc.contains('sorcerer')) {
-      looktype = 130; // Mago Ferumbras Hat
+      looktype = 130;
     } else if (voc.contains('knight')) {
-      looktype = 131; // Knight Full Armadura
+      looktype = 131;
     } else if (voc.contains('paladin')) {
-      looktype = 129; // Paladín Hunter
+      looktype = 129;
     } else if (voc.contains('druid')) {
-      looktype = 144; // Druida Cuernos
+      looktype = 144;
     }
 
-    // head=79 (Amarillo), body=86 (Azul), legs=94 (Rojo), feet=94 (Rojo)
     final animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=$looktype&addons=3&head=79&body=86&legs=94&feet=94&direction=3";
 
     return Opacity(
@@ -570,7 +601,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // MONSTRUOS & BOSSES ANIMADOS EN MOVIMIENTO REAL
   Widget _buildLiveAnimatedCreature(String creatureName) {
     final clean = creatureName
         .replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '')
@@ -597,17 +627,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // MINIMAPAS EXCLUSIVOS PARA RASHID
   Map<String, String> getRashidData() {
     final now = DateTime.now();
     switch (now.weekday) {
-      case DateTime.monday: return {'city': 'Svargrond', 'map_url': 'https://tibiamaps.github.io/tibia-map-data/floor-07-map.png'};
-      case DateTime.tuesday: return {'city': 'Liberty Bay', 'map_url': 'https://tibiamaps.github.io/tibia-map-data/floor-07-map.png'};
-      case DateTime.wednesday: return {'city': 'Port Hope', 'map_url': 'https://tibiamaps.github.io/tibia-map-data/floor-07-map.png'};
-      case DateTime.thursday: return {'city': 'Ankrahmun', 'map_url': 'https://tibiamaps.github.io/tibia-map-data/floor-07-map.png'};
-      case DateTime.friday: return {'city': 'Darashia', 'map_url': 'https://tibiamaps.github.io/tibia-map-data/floor-07-map.png'};
-      case DateTime.saturday: return {'city': 'Edron', 'map_url': 'https://tibiamaps.github.io/tibia-map-data/floor-07-map.png'};
-      case DateTime.sunday: return {'city': 'Carlin', 'map_url': 'https://tibiamaps.github.io/tibia-map-data/floor-07-map.png'};
-      default: return {'city': 'Darashia', 'map_url': 'https://tibiamaps.github.io/tibia-map-data/floor-07-map.png'};
+      case DateTime.monday: return {'city': 'Svargrond', 'map_url': 'https://www.tibiawiki.com.br/images/1/1a/Map_Svargrond.jpg'};
+      case DateTime.tuesday: return {'city': 'Liberty Bay', 'map_url': 'https://www.tibiawiki.com.br/images/0/05/Map_liberty_bay.jpg'};
+      case DateTime.wednesday: return {'city': 'Port Hope', 'map_url': 'https://www.tibiawiki.com.br/images/5/52/Map_Port_Hope.jpg'};
+      case DateTime.thursday: return {'city': 'Ankrahmun', 'map_url': 'https://www.tibiawiki.com.br/images/9/9d/Map_Ankrahmun.png'};
+      case DateTime.friday: return {'city': 'Darashia', 'map_url': 'https://www.tibiawiki.com.br/images/7/75/Map_darashia.jpg'};
+      case DateTime.saturday: return {'city': 'Edron', 'map_url': 'https://www.tibiawiki.com.br/images/b/be/Map_edron.jpg'};
+      case DateTime.sunday: return {'city': 'Carlin', 'map_url': 'https://www.tibiawiki.com.br/images/c/c2/Map_Carlin.jpg'};
+      default: return {'city': 'Darashia', 'map_url': 'https://www.tibiawiki.com.br/images/7/75/Map_darashia.jpg'};
     }
   }
 
@@ -619,7 +650,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // Noticia oficial superior
+        // Noticia superior
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           color: const Color(0xFF161B24),
@@ -641,7 +672,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // Jugadores Online + Gráfica verde neón
+        // Jugadores Online
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           color: const Color(0xFF0F1318),
@@ -668,7 +699,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // Buscador universal automático
+        // Buscador universal
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
           child: Column(
@@ -738,7 +769,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // Lista de Personajes con muñeco tricolor caminando
+        // Lista de Personajes
         ...displayList.map((target) {
           final key = target.name.toLowerCase();
           final isOnline = onlinePlayersData.containsKey(key);
@@ -799,14 +830,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
         const SizedBox(height: 12),
 
-        // -------------------------------------------------------------
-        // BOOSTED CREATURE & BOOSTED BOSS ANIMADOS EN MOVIMIENTO
-        // -------------------------------------------------------------
+        // Boosted Creature & Boss animados
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             children: [
-              // 1. Boosted Creature animada en movimiento
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
@@ -826,8 +854,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(width: 10),
-
-              // 2. Boosted Boss animado en movimiento
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
@@ -852,7 +878,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
         const SizedBox(height: 14),
 
-        // Tarjeta de Rashid en vivo
+        // -------------------------------------------------------------
+        // TARJETA DE RASHID CON MINIMAPA REAL Y RASHID CAMINANDO
+        // -------------------------------------------------------------
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
@@ -875,20 +903,26 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Stack(
                   children: [
                     Positioned.fill(child: Container(color: const Color(0xFF264C8A))),
+                    // MINIMAPA REAL DE LA CIUDAD DE RASHID
                     Positioned(
                       left: 0,
                       top: 0,
                       bottom: 0,
-                      width: 170,
+                      width: 175,
                       child: ClipRRect(
                         child: Image.network(
                           rData['map_url']!,
                           fit: BoxFit.cover,
                           alignment: Alignment.center,
+                          filterQuality: FilterQuality.none,
+                          headers: const {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+                          },
                           errorBuilder: (_, __, ___) => Container(color: const Color(0xFFC7A762)),
                         ),
                       ),
                     ),
+                    // RASHID CAMINANDO EN DIAGONAL
                     Positioned(
                       right: 38,
                       top: 25,
@@ -941,7 +975,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // -------------------------------------------------------------
-// PANTALLA DETALLE: MUERTES CON MONSTRUOS Y PKS ANIMADOS
+// PANTALLA DETALLE: MINIMAPA REAL DE LA CIUDAD DE RESIDENCIA
 // -------------------------------------------------------------
 class CharacterDetailScreen extends StatefulWidget {
   final TrackTarget target;
@@ -1006,7 +1040,6 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
   }
 
-  // MONSTRUO ANIMADO EN MOVIMIENTO DE LA MUERTE
   Widget _buildDeathMonsterAnimated(String killerName) {
     final clean = killerName
         .replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '')
@@ -1094,30 +1127,37 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           ),
           const SizedBox(height: 10),
 
-          // Mapa de residencia
+          // -------------------------------------------------------------
+          // MINIMAPA REAL Y EXCLUSIVO DE LA CIUDAD DE RESIDENCIA
+          // -------------------------------------------------------------
           Container(
-            height: 135,
+            height: 160,
             width: double.infinity,
-            decoration: BoxDecoration(color: const Color(0xFF16253D), borderRadius: BorderRadius.circular(4)),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: Opacity(
-                    opacity: 0.35,
-                    child: Image.network("https://tibiamaps.github.io/tibia-map-data/floor-07-map.png", fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox()),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16253D),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Image.network(
+                      getCityMinimapUrl(residence),
+                      fit: BoxFit.cover,
+                      alignment: Alignment.center,
+                      filterQuality: FilterQuality.none,
+                      headers: const {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+                      },
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Icon(Icons.location_city, color: Color(0xFF00FFB2), size: 36),
+                      ),
+                    ),
                   ),
-                ),
-                Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.location_city, color: Color(0xFF00FFB2), size: 28),
-                      const SizedBox(height: 4),
-                      Text("CIUDAD: $residence".toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 1.0)),
-                    ],
-                  ),
-                )
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 10),
@@ -1153,9 +1193,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
             ),
           const SizedBox(height: 10),
 
-          // -------------------------------------------------------------
-          // SECCIÓN MUERTES: CON MONSTRUO ANIMADO O JUGADORES PK (VIDEO)
-          // -------------------------------------------------------------
+          // Sección Muertes
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: const Color(0xFF161A22), borderRadius: BorderRadius.circular(4)),
@@ -1183,7 +1221,6 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              // Nivel a la izquierda
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1192,8 +1229,6 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                                 ],
                               ),
                               const SizedBox(width: 14),
-
-                              // Descripción de la muerte
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1209,8 +1244,6 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                                   ],
                                 ),
                               ),
-
-                              // MONSTRUO ANIMADO EN MOVIMIENTO (IGUAL AL VIDEO)
                               if (!isPkMass)
                                 SizedBox(
                                   width: 48,
@@ -1219,8 +1252,6 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                                 ),
                             ],
                           ),
-
-                          // SI FUE MUERTE POR PKs: CUADRÍCULA DE JUGADORES CAMINANDO (MINUTO 00:52)
                           if (isPkMass) ...[
                             const SizedBox(height: 10),
                             Wrap(
