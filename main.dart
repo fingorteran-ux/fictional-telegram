@@ -170,13 +170,13 @@ class _MainDrawerScreenState extends State<MainDrawerScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text("SPY FEROBRA", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                          Text("CERO LÍMITES // MULTI-MUNDO", style: TextStyle(color: Color(0xFF00FFB2), fontSize: 10, fontWeight: FontWeight.bold)),
+                          Text("CERO LÍMITES // ANIMACIONES ON", style: TextStyle(color: Color(0xFF00FFB2), fontSize: 10, fontWeight: FontWeight.bold)),
                         ],
                       )
                     ],
                   ),
                   const SizedBox(height: 10),
-                  const Text("Rastrea cualquier personaje de cualquier servidor", style: TextStyle(color: Colors.white54, fontSize: 11)),
+                  const Text("Monstruos, bosses y personajes animados en vivo", style: TextStyle(color: Colors.white54, fontSize: 11)),
                 ],
               ),
             ),
@@ -252,9 +252,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, String> characterNotes = {};
 
   String boostedCreatureName = "Rustheap Golem";
-  String boostedCreatureImg = "https://static.tibia.com/images/global/content/creatures/rustheapgolem.gif";
   String boostedBossName = "The Diamond Blossom";
-  String boostedBossImg = "https://static.tibia.com/images/global/content/bosses/thediamondblossom.gif";
 
   bool isScanning = false;
   bool isAddingPlayer = false;
@@ -322,7 +320,6 @@ class _HomeScreenState extends State<HomeScreen> {
         if (b != null && mounted) {
           setState(() {
             boostedCreatureName = b['name'] ?? 'Rustheap Golem';
-            boostedCreatureImg = b['image_url'] ?? '';
           });
         }
       }
@@ -335,7 +332,6 @@ class _HomeScreenState extends State<HomeScreen> {
         if (b != null && mounted) {
           setState(() {
             boostedBossName = b['name'] ?? 'The Diamond Blossom';
-            boostedBossImg = b['image_url'] ?? '';
           });
         }
       }
@@ -476,7 +472,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // DETECCIÓN AUTOMÁTICA DEL MUNDO SIN LIMITACIONES
   Future<void> addTargetAuto(String type) async {
     final text = _nameController.text.trim();
     if (text.isEmpty) return;
@@ -523,22 +518,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
           await syncNativeService();
           scanAllWorlds();
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text("✅ Detectado: $officialName en servidor $officialWorld"),
-                backgroundColor: const Color(0xFF00FFB2),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          }
           return;
         }
       }
     } catch (_) {}
 
-    // Fallback si la API no responde de inmediato
     final fallbackTarget = TrackTarget(name: text, type: type, world: 'Ferobra');
     setState(() {
       targets.add(fallbackTarget);
@@ -555,21 +539,23 @@ class _HomeScreenState extends State<HomeScreen> {
     syncNativeService();
   }
 
+  // MUÑECOS EN MOVIMIENTO CON UNIFORME AMARILLO, AZUL Y ROJO (TRICOLOR)
   Widget _getVocationWalkingSprite(String? vocation, bool isOnline) {
     final voc = (vocation ?? '').toLowerCase();
-    String animUrl;
+    int looktype = 128;
 
     if (voc.contains('sorcerer')) {
-      animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=130&addons=3&direction=3";
+      looktype = 130; // Mago Ferumbras Hat
     } else if (voc.contains('knight')) {
-      animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=131&addons=3&direction=3";
+      looktype = 131; // Knight Full Armadura
     } else if (voc.contains('paladin')) {
-      animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=129&addons=3&direction=3";
+      looktype = 129; // Paladín Hunter
     } else if (voc.contains('druid')) {
-      animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=144&addons=3&direction=3";
-    } else {
-      animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=128&addons=3&direction=3";
+      looktype = 144; // Druida Cuernos
     }
+
+    // head=79 (Amarillo), body=86 (Azul), legs=94 (Rojo), feet=94 (Rojo)
+    final animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=$looktype&addons=3&head=79&body=86&legs=94&feet=94&direction=3";
 
     return Opacity(
       opacity: isOnline ? 1.0 : 0.45,
@@ -580,6 +566,33 @@ class _HomeScreenState extends State<HomeScreen> {
         fit: BoxFit.contain,
         filterQuality: FilterQuality.none,
         errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white24, size: 36),
+      ),
+    );
+  }
+
+  // MONSTRUOS & BOSSES ANIMADOS EN MOVIMIENTO REAL
+  Widget _buildLiveAnimatedCreature(String creatureName) {
+    final clean = creatureName
+        .replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '')
+        .trim()
+        .replaceAll(' ', '_');
+
+    final gifUrl = "https://tibia.fandom.com/wiki/Special:FilePath/$clean.gif";
+
+    return Image.network(
+      gifUrl,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.none,
+      headers: const {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+      },
+      errorBuilder: (_, __, ___) => Image.network(
+        "https://tibia.fandom.com/wiki/Special:FilePath/Demon.gif",
+        fit: BoxFit.contain,
+        headers: const {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        },
+        errorBuilder: (_, __, ___) => const Icon(Icons.pest_control, color: Colors.white30, size: 32),
       ),
     );
   }
@@ -606,7 +619,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        // Noticia oficial de Tibia superior
+        // Noticia oficial superior
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           color: const Color(0xFF161B24),
@@ -628,7 +641,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // Jugadores Online + Gráfica verde neón (Tibia Live)
+        // Jugadores Online + Gráfica verde neón
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           color: const Color(0xFF0F1318),
@@ -655,7 +668,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // Panel de búsqueda universal
+        // Buscador universal automático
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
           child: Column(
@@ -669,7 +682,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       controller: _nameController,
                       style: const TextStyle(color: Colors.white, fontSize: 14),
                       decoration: InputDecoration(
-                        hintText: "Escribe cualquier personaje (Cualquier servidor)...",
+                        hintText: "Escribe cualquier personaje...",
                         hintStyle: const TextStyle(color: Colors.white30, fontSize: 12),
                         border: InputBorder.none,
                         prefixIcon: const Icon(Icons.search, color: Color(0xFF00FFB2), size: 20),
@@ -725,7 +738,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // Lista de Personajes estilo Tibia Live
+        // Lista de Personajes con muñeco tricolor caminando
         ...displayList.map((target) {
           final key = target.name.toLowerCase();
           final isOnline = onlinePlayersData.containsKey(key);
@@ -786,11 +799,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
         const SizedBox(height: 12),
 
-        // Bloques Boosted Creature & Boss
+        // -------------------------------------------------------------
+        // BOOSTED CREATURE & BOOSTED BOSS ANIMADOS EN MOVIMIENTO
+        // -------------------------------------------------------------
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             children: [
+              // 1. Boosted Creature animada en movimiento
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
@@ -800,8 +816,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       const Text("Boosted Creature", style: TextStyle(color: Colors.white70, fontSize: 12)),
                       const SizedBox(height: 6),
                       SizedBox(
-                        height: 50,
-                        child: Image.network(boostedCreatureImg, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.pest_control, color: Colors.white24)),
+                        height: 52,
+                        child: _buildLiveAnimatedCreature(boostedCreatureName),
                       ),
                       const SizedBox(height: 6),
                       Text(boostedCreatureName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
@@ -810,6 +826,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(width: 10),
+
+              // 2. Boosted Boss animado en movimiento
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
@@ -819,8 +837,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       const Text("Boosted Boss", style: TextStyle(color: Colors.white70, fontSize: 12)),
                       const SizedBox(height: 6),
                       SizedBox(
-                        height: 50,
-                        child: Image.network(boostedBossImg, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.shield, color: Colors.white24)),
+                        height: 52,
+                        child: _buildLiveAnimatedCreature(boostedBossName),
                       ),
                       const SizedBox(height: 6),
                       Text(boostedBossName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
@@ -834,7 +852,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         const SizedBox(height: 14),
 
-        // Tarjeta de Rashid idéntica a Tibia Live
+        // Tarjeta de Rashid en vivo
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
@@ -856,9 +874,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: double.infinity,
                 child: Stack(
                   children: [
-                    Positioned.fill(
-                      child: Container(color: const Color(0xFF264C8A)),
-                    ),
+                    Positioned.fill(child: Container(color: const Color(0xFF264C8A))),
                     Positioned(
                       left: 0,
                       top: 0,
@@ -925,7 +941,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // -------------------------------------------------------------
-// PANTALLA DE DETALLE COMPLETO DEL PERSONAJE
+// PANTALLA DETALLE: MUERTES CON MONSTRUOS Y PKS ANIMADOS
 // -------------------------------------------------------------
 class CharacterDetailScreen extends StatefulWidget {
   final TrackTarget target;
@@ -990,6 +1006,37 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
   }
 
+  // MONSTRUO ANIMADO EN MOVIMIENTO DE LA MUERTE
+  Widget _buildDeathMonsterAnimated(String killerName) {
+    final clean = killerName
+        .replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '')
+        .trim()
+        .replaceAll(' ', '_');
+
+    final gifUrl = "https://tibia.fandom.com/wiki/Special:FilePath/$clean.gif";
+
+    return Image.network(
+      gifUrl,
+      width: 48,
+      height: 48,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.none,
+      headers: const {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+      },
+      errorBuilder: (_, __, ___) => Image.network(
+        "https://tibia.fandom.com/wiki/Special:FilePath/Demon.gif",
+        width: 44,
+        height: 44,
+        fit: BoxFit.contain,
+        headers: const {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        },
+        errorBuilder: (_, __, ___) => const Icon(Icons.dangerous, color: Colors.redAccent, size: 28),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final raw = widget.fullData['raw'] ?? {};
@@ -1004,15 +1051,12 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       appBar: AppBar(
         title: const Text("Información del personaje", style: TextStyle(fontSize: 15)),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_note),
-            onPressed: editNoteDialog,
-          ),
+          IconButton(icon: const Icon(Icons.edit_note), onPressed: editNoteDialog),
           IconButton(
             icon: const Icon(Icons.share),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: "https://www.tibia.com/community/?subtopic=characters&name=${widget.target.name}"));
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Enlace oficial copiado")));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Enlace copiado")));
             },
           )
         ],
@@ -1020,13 +1064,14 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
+          // Tarjeta superior
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: const Color(0xFF161A22), borderRadius: BorderRadius.circular(4)),
             child: Row(
               children: [
                 Image.network(
-                  "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=131&addons=3&direction=3",
+                  "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=131&addons=3&head=79&body=86&legs=94&feet=94&direction=3",
                   width: 50,
                   height: 50,
                   fit: BoxFit.contain,
@@ -1049,6 +1094,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           ),
           const SizedBox(height: 10),
 
+          // Mapa de residencia
           Container(
             height: 135,
             width: double.infinity,
@@ -1107,6 +1153,9 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
             ),
           const SizedBox(height: 10),
 
+          // -------------------------------------------------------------
+          // SECCIÓN MUERTES: CON MONSTRUO ANIMADO O JUGADORES PK (VIDEO)
+          // -------------------------------------------------------------
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: const Color(0xFF161A22), borderRadius: BorderRadius.circular(4)),
@@ -1121,37 +1170,89 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                   ...deaths.map((d) {
                     final killers = (d['killers'] as List? ?? []);
                     final dateStr = (d['time'] ?? '').toString().replaceFirst('T', ' ').replaceAll('Z', '');
-                    final isPkMass = killers.length > 1;
+                    final isPkMass = killers.any((k) => k['player'] == true);
+                    final firstKillerName = killers.isNotEmpty ? (killers.first['name'] ?? 'Criatura') : 'Criatura';
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(color: const Color(0xFF0F1218), borderRadius: BorderRadius.circular(4)),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              Text("${d['level']} NIVEL", style: const TextStyle(color: Color(0xFFFF5252), fontWeight: FontWeight.bold, fontSize: 13)),
-                              Text(dateStr, style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                              // Nivel a la izquierda
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("${d['level']}", style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                                  const Text("NIVEL", style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                              const SizedBox(width: 14),
+
+                              // Descripción de la muerte
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      isPkMass
+                                          ? "Muerto por: ${killers.length} jugadores"
+                                          : "Muerto por: $firstKillerName",
+                                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(dateStr, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                                  ],
+                                ),
+                              ),
+
+                              // MONSTRUO ANIMADO EN MOVIMIENTO (IGUAL AL VIDEO)
+                              if (!isPkMass)
+                                SizedBox(
+                                  width: 48,
+                                  height: 48,
+                                  child: _buildDeathMonsterAnimated(firstKillerName),
+                                ),
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            isPkMass ? "Muerto por: ${killers.length} jugadores" : "Muerto por: ${killers.isNotEmpty ? killers.first['name'] : 'Criatura'}",
-                            style: const TextStyle(color: Colors.white, fontSize: 12),
-                          ),
+
+                          // SI FUE MUERTE POR PKs: CUADRÍCULA DE JUGADORES CAMINANDO (MINUTO 00:52)
                           if (isPkMass) ...[
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 10),
                             Wrap(
-                              spacing: 6,
-                              runSpacing: 4,
+                              spacing: 12,
+                              runSpacing: 10,
                               children: killers.map((k) {
-                                return Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(3)),
-                                  child: Text("⚔️ ${k['name']}", style: const TextStyle(color: Color(0xFFFF8A80), fontSize: 10)),
+                                return SizedBox(
+                                  width: 85,
+                                  child: Column(
+                                    children: [
+                                      Image.network(
+                                        "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=131&addons=3&head=79&body=86&legs=94&feet=94&direction=3",
+                                        width: 42,
+                                        height: 42,
+                                        fit: BoxFit.contain,
+                                        filterQuality: FilterQuality.none,
+                                        errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.redAccent, size: 28),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        k['name'] ?? 'PK',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                      ),
+                                      Text(
+                                        "Nivel ${k['level'] ?? '?'}",
+                                        style: const TextStyle(color: Colors.white38, fontSize: 10),
+                                      ),
+                                    ],
+                                  ),
                                 );
                               }).toList(),
                             )
@@ -1379,7 +1480,7 @@ class EventsScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(14),
       children: [
-        _eventItem("Annual Autumn Vintage", "En curso – Finaliza en 8 horas", Colors.amber),
+        _eventItem("Annual Autumn Vintage", "En curso – Finaliza en 7 horas", Colors.amber),
         _eventItem("Halloween Event", "31 octubre – 3 noviembre", const Color(0xFF00FFB2)),
         _eventItem("The Lightbearer", "11 noviembre – 15 noviembre", Colors.orangeAccent),
         _eventItem("Full Moon", "12 noviembre – 15 noviembre", const Color(0xFF00E5FF)),
