@@ -13,7 +13,7 @@ void main() {
 }
 
 // -------------------------------------------------------------
-// AUDIO MILITAR
+// AUDIO TÁCTICO
 // -------------------------------------------------------------
 class TacticalAudio {
   static final AudioPlayer _player = AudioPlayer();
@@ -62,7 +62,7 @@ class TacticalAudio {
 }
 
 // -------------------------------------------------------------
-// APP & ROOT
+// APP ROOT
 // -------------------------------------------------------------
 class SpyFerobraApp extends StatelessWidget {
   const SpyFerobraApp({super.key});
@@ -74,11 +74,12 @@ class SpyFerobraApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF101317),
+        scaffoldBackgroundColor: const Color(0xFF111418),
         primaryColor: const Color(0xFF00FFB2),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF0A0D12),
+          backgroundColor: Color(0xFF0C0E12),
           elevation: 0,
+          titleTextStyle: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ),
       home: const MainDrawerScreen(),
@@ -103,7 +104,7 @@ class TrackTarget {
 }
 
 // -------------------------------------------------------------
-// CONTENEDOR PRINCIPAL CON MENÚ LATERAL (DRAWER COMPLETO)
+// CONTENEDOR CON DRAWER LATERAL
 // -------------------------------------------------------------
 class MainDrawerScreen extends StatefulWidget {
   const MainDrawerScreen({super.key});
@@ -135,10 +136,7 @@ class _MainDrawerScreenState extends State<MainDrawerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _titles[_selectedDrawerIndex],
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 14, fontWeight: FontWeight.bold),
-        ),
+        title: Text(_titles[_selectedDrawerIndex]),
         actions: [
           IconButton(
             icon: Icon(TacticalAudio.soundEnabled ? Icons.volume_up : Icons.volume_off, color: TacticalAudio.soundEnabled ? const Color(0xFF00FFB2) : Colors.grey),
@@ -147,17 +145,14 @@ class _MainDrawerScreenState extends State<MainDrawerScreen> {
         ],
       ),
       drawer: Drawer(
-        backgroundColor: const Color(0xFF13171F),
+        backgroundColor: const Color(0xFF14171E),
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
             DrawerHeader(
               decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF0A0D12), Color(0xFF192333)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                color: Color(0xFF0C0E12),
+                border: Border(bottom: BorderSide(color: Colors.white10)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,35 +161,35 @@ class _MainDrawerScreenState extends State<MainDrawerScreen> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(color: const Color(0xFF00FFB2).withOpacity(0.15), shape: BoxShape.circle),
-                        child: const Icon(Icons.security, color: Color(0xFF00FFB2), size: 28),
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(color: const Color(0xFF00FFB2).withOpacity(0.12), shape: BoxShape.circle),
+                        child: const Icon(Icons.shield, color: Color(0xFF00FFB2), size: 26),
                       ),
                       const SizedBox(width: 10),
                       const Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text("SPY FEROBRA", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                          Text("SISTEMA ILIMITADO // PRO FREE", style: TextStyle(color: Color(0xFF00FFB2), fontSize: 10, fontFamily: 'monospace')),
+                          Text("SPY FEROBRA", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                          Text("CERO LÍMITES // MULTI-MUNDO", style: TextStyle(color: Color(0xFF00FFB2), fontSize: 10, fontWeight: FontWeight.bold)),
                         ],
                       )
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  const Text("Vigilancia táctica 24/7 sin bloqueos", style: TextStyle(color: Colors.white54, fontSize: 11)),
+                  const SizedBox(height: 10),
+                  const Text("Rastrea cualquier personaje de cualquier servidor", style: TextStyle(color: Colors.white54, fontSize: 11)),
                 ],
               ),
             ),
-            _drawerTile(0, Icons.home, "Inicio (Radar & HUD)"),
+            _drawerTile(0, Icons.home, "Inicio"),
             _drawerTile(1, Icons.public, "Mundos"),
-            _drawerTile(2, Icons.event_available, "Eventos"),
-            const Divider(color: Colors.white12),
+            _drawerTile(2, Icons.calendar_today, "Eventos"),
+            const Divider(color: Colors.white10, height: 20),
             const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Text("HERRAMIENTAS TÁCTICAS", style: TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace')),
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Text("UTILIDADES", style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
             ),
-            _drawerTile(3, Icons.group_add, "Compartir Experiencia (Party)"),
-            _drawerTile(4, Icons.shield, "Blessings & Costos de Muerte"),
+            _drawerTile(3, Icons.group_add, "Compartir Experiencia"),
+            _drawerTile(4, Icons.security, "Blessings y Penalización"),
           ],
         ),
       ),
@@ -224,7 +219,7 @@ class _MainDrawerScreenState extends State<MainDrawerScreen> {
 }
 
 // -------------------------------------------------------------
-// PANTALLA 1: INICIO (HOME / RADAR / TIBIA LIVE COMPLETO)
+// PANTALLA PRINCIPAL: HOME
 // -------------------------------------------------------------
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -243,7 +238,6 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   final TextEditingController _nameController = TextEditingController();
-  String selectedWorldInput = 'Ferobra';
   String currentFilter = 'TODOS';
 
   int globalPlayersOnline = 15330;
@@ -258,13 +252,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, String> characterNotes = {};
 
   String boostedCreatureName = "Rustheap Golem";
-  String boostedCreatureImg = "";
+  String boostedCreatureImg = "https://static.tibia.com/images/global/content/creatures/rustheapgolem.gif";
   String boostedBossName = "The Diamond Blossom";
-  String boostedBossImg = "";
+  String boostedBossImg = "https://static.tibia.com/images/global/content/bosses/thediamondblossom.gif";
 
-  List<String> radarLogs = [];
   bool isScanning = false;
-  bool isBackgroundActive = true;
+  bool isAddingPlayer = false;
   Timer? _timer;
   Timer? _clockUpdater;
 
@@ -355,12 +348,8 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.setString('spy_targets_json', jsonStr);
 
     try {
-      if (isBackgroundActive) {
-        await platform.invokeMethod('startRadarService');
-        await platform.invokeMethod('syncTargets', {'json': jsonStr});
-      } else {
-        await platform.invokeMethod('stopRadarService');
-      }
+      await platform.invokeMethod('startRadarService');
+      await platform.invokeMethod('syncTargets', {'json': jsonStr});
     } catch (_) {}
   }
 
@@ -399,7 +388,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 'vocation': ch['vocation'] ?? 'None',
                 'residence': ch['town'] ?? 'Thais',
                 'account_status': ch['account_status'] ?? 'Free Account',
-                'achievement_points': ch['achievement_points'] ?? 0,
                 'last_login': lastLoginStr,
               };
             });
@@ -488,16 +476,76 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void addTarget(String type) {
+  // DETECCIÓN AUTOMÁTICA DEL MUNDO SIN LIMITACIONES
+  Future<void> addTargetAuto(String type) async {
     final text = _nameController.text.trim();
-    if (text.isNotEmpty && !targets.any((t) => t.name.toLowerCase() == text.toLowerCase())) {
-      final newT = TrackTarget(name: text, type: type, world: selectedWorldInput);
-      setState(() => targets.add(newT));
-      fetchCharacterDetails(text);
-      syncNativeService();
-      _nameController.clear();
-      scanAllWorlds();
+    if (text.isEmpty) return;
+
+    if (targets.any((t) => t.name.toLowerCase() == text.toLowerCase())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Este personaje ya está en tu lista de rastreo")),
+      );
+      return;
     }
+
+    setState(() => isAddingPlayer = true);
+    _nameController.clear();
+
+    try {
+      final res = await http.get(
+        Uri.parse('https://api.tibiadata.com/v4/character/${Uri.encodeComponent(text)}'),
+        headers: {'User-Agent': 'Mozilla/5.0 (Android; Mobile)'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        final ch = data['character']?['character'];
+        if (ch != null && ch['name'] != null) {
+          final officialName = ch['name'].toString();
+          final officialWorld = (ch['world'] ?? 'Ferobra').toString();
+
+          final newT = TrackTarget(name: officialName, type: type, world: officialWorld);
+          setState(() {
+            targets.add(newT);
+            characterFullData[officialName.toLowerCase()] = {
+              'raw': ch,
+              'deaths': data['character']?['deaths'] ?? [],
+              'houses': data['character']?['houses'] ?? [],
+              'guild': data['character']?['guild'] ?? {},
+              'level': ch['level'] ?? 0,
+              'vocation': ch['vocation'] ?? 'None',
+              'residence': ch['town'] ?? 'Thais',
+              'account_status': ch['account_status'] ?? 'Free Account',
+              'last_login': ch['last_login'] ?? '',
+            };
+            isAddingPlayer = false;
+          });
+
+          await syncNativeService();
+          scanAllWorlds();
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("✅ Detectado: $officialName en servidor $officialWorld"),
+                backgroundColor: const Color(0xFF00FFB2),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          return;
+        }
+      }
+    } catch (_) {}
+
+    // Fallback si la API no responde de inmediato
+    final fallbackTarget = TrackTarget(name: text, type: type, world: 'Ferobra');
+    setState(() {
+      targets.add(fallbackTarget);
+      isAddingPlayer = false;
+    });
+    await syncNativeService();
+    scanAllWorlds();
   }
 
   void removeTarget(String name) {
@@ -524,11 +572,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Opacity(
-      opacity: isOnline ? 1.0 : 0.4,
+      opacity: isOnline ? 1.0 : 0.45,
       child: Image.network(
         animUrl,
-        width: 46,
-        height: 46,
+        width: 48,
+        height: 48,
         fit: BoxFit.contain,
         filterQuality: FilterQuality.none,
         errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white24, size: 36),
@@ -536,44 +584,53 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  String formatElapsedTime(int millis) {
-    final seconds = (millis / 1000).floor();
-    if (seconds < 60) return "${seconds}s";
-    final mins = (seconds / 60).floor();
-    if (mins < 60) return "${mins}m";
-    final hrs = (mins / 60).floor();
-    final remMins = mins % 60;
-    if (hrs < 24) return "${hrs}h ${remMins}m";
-    final days = (hrs / 24).floor();
-    final remHrs = hrs % 24;
-    return "${days}d ${remHrs}h";
+  Map<String, String> getRashidData() {
+    final now = DateTime.now();
+    switch (now.weekday) {
+      case DateTime.monday: return {'city': 'Svargrond', 'map_url': 'https://tibiamaps.github.io/tibia-map-data/floor-07-map.png'};
+      case DateTime.tuesday: return {'city': 'Liberty Bay', 'map_url': 'https://tibiamaps.github.io/tibia-map-data/floor-07-map.png'};
+      case DateTime.wednesday: return {'city': 'Port Hope', 'map_url': 'https://tibiamaps.github.io/tibia-map-data/floor-07-map.png'};
+      case DateTime.thursday: return {'city': 'Ankrahmun', 'map_url': 'https://tibiamaps.github.io/tibia-map-data/floor-07-map.png'};
+      case DateTime.friday: return {'city': 'Darashia', 'map_url': 'https://tibiamaps.github.io/tibia-map-data/floor-07-map.png'};
+      case DateTime.saturday: return {'city': 'Edron', 'map_url': 'https://tibiamaps.github.io/tibia-map-data/floor-07-map.png'};
+      case DateTime.sunday: return {'city': 'Carlin', 'map_url': 'https://tibiamaps.github.io/tibia-map-data/floor-07-map.png'};
+      default: return {'city': 'Darashia', 'map_url': 'https://tibiamaps.github.io/tibia-map-data/floor-07-map.png'};
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final displayList = filteredTargets;
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final rData = getRashidData();
 
     return ListView(
+      padding: EdgeInsets.zero,
       children: [
-        // 1. Ticker / Noticia superior
+        // Noticia oficial de Tibia superior
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          color: const Color(0xFF191F2B),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          color: const Color(0xFF161B24),
           child: const Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text("NOTICIA OFICIAL DE TIBIA", style: TextStyle(color: Color(0xFF00FFB2), fontSize: 10, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+              Row(
+                children: [
+                  Icon(Icons.feed, size: 13, color: Color(0xFF00FFB2)),
+                  SizedBox(width: 5),
+                  Text("NOTICIA OFICIAL DE CIPSOFT", style: TextStyle(color: Color(0xFF00FFB2), fontSize: 10, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              SizedBox(height: 3),
+              Text("New Optional and Open PvP Game Worlds", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
               SizedBox(height: 2),
-              Text("New Optional and Open PvP Game Worlds", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-              Text("Los servidores de prueba ya se encuentran disponibles para la comunidad.", style: TextStyle(color: Colors.white60, fontSize: 10)),
+              Text("Servidores en línea disponibles para pruebas y feedback.", style: TextStyle(color: Colors.white60, fontSize: 11)),
             ],
           ),
         ),
 
-        // 2. Jugadores Online + Gráfica Tibia Live
+        // Jugadores Online + Gráfica verde neón (Tibia Live)
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           color: const Color(0xFF0F1318),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -581,11 +638,11 @@ class _HomeScreenState extends State<HomeScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Jugadores online", style: TextStyle(color: Colors.white60, fontSize: 11, fontFamily: 'monospace')),
+                  const Text("Jugadores online", style: TextStyle(color: Colors.white54, fontSize: 11)),
                   const SizedBox(height: 2),
                   Text(
                     globalPlayersOnline.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},'),
-                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+                    style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -598,52 +655,48 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // 3. Panel de agregar personaje
+        // Panel de búsqueda universal
         Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
           child: Column(
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: const Color(0xFF151A22), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white10)),
+                decoration: BoxDecoration(color: const Color(0xFF171B24), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white10)),
                 child: Column(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _nameController,
-                            style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
-                            decoration: const InputDecoration(hintText: "Rastrear personaje...", hintStyle: TextStyle(color: Colors.white30, fontSize: 12), border: InputBorder.none),
-                          ),
-                        ),
-                        DropdownButton<String>(
-                          value: selectedWorldInput,
-                          dropdownColor: const Color(0xFF151A22),
-                          underline: const SizedBox(),
-                          style: const TextStyle(color: Color(0xFF00FFB2), fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold),
-                          items: ['Ferobra', 'Quintera', 'Antica'].map((w) => DropdownMenuItem(value: w, child: Text(w))).toList(),
-                          onChanged: (val) {
-                            if (val != null) setState(() => selectedWorldInput = val);
-                          },
-                        ),
-                      ],
+                    TextField(
+                      controller: _nameController,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: "Escribe cualquier personaje (Cualquier servidor)...",
+                        hintStyle: const TextStyle(color: Colors.white30, fontSize: 12),
+                        border: InputBorder.none,
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFF00FFB2), size: 20),
+                        suffixIcon: isAddingPlayer
+                            ? const Padding(
+                                padding: EdgeInsets.all(10.0),
+                                child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00FFB2))),
+                              )
+                            : null,
+                      ),
                     ),
+                    const SizedBox(height: 6),
                     Row(
                       children: [
                         Expanded(
                           child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FFB2), foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 6)),
-                            onPressed: () => addTarget('amigo'),
-                            child: const Text("🛡️ + AMIGO", style: TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FFB2), foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 8)),
+                            onPressed: isAddingPlayer ? null : () => addTargetAuto('amigo'),
+                            child: const Text("🛡️ + AMIGO", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF5252), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 6)),
-                            onPressed: () => addTarget('enemigo'),
-                            child: const Text("⚔️ + ENEMIGO", style: TextStyle(fontFamily: 'monospace', fontSize: 11, fontWeight: FontWeight.bold)),
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF5252), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 8)),
+                            onPressed: isAddingPlayer ? null : () => addTargetAuto('enemigo'),
+                            child: const Text("⚔️ + ENEMIGO", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                           ),
                         ),
                       ],
@@ -651,13 +704,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
 
-              // Contador de capacidad ilimitada (Sin restricciones Pro)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text("RASTREANDO (${targets.length}) // SIN LÍMITES", style: const TextStyle(color: Color(0xFF00FFB2), fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                  Text("VIGILANCIA (${targets.length}) // SIN LÍMITES", style: const TextStyle(color: Color(0xFF00FFB2), fontSize: 11, fontWeight: FontWeight.bold)),
                   Row(
                     children: [
                       _filterTab('TODOS'),
@@ -673,7 +725,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // 4. Lista de Personajes (Al tocar abre Información del Personaje)
+        // Lista de Personajes estilo Tibia Live
         ...displayList.map((target) {
           final key = target.name.toLowerCase();
           final isOnline = onlinePlayersData.containsKey(key);
@@ -681,27 +733,19 @@ class _HomeScreenState extends State<HomeScreen> {
           final level = isOnline ? (onlinePlayersData[key]['level'] ?? 0) : (full['level'] ?? 0);
           final vocation = isOnline ? (onlinePlayersData[key]['vocation'] ?? '') : (full['vocation'] ?? 'Cargando...');
 
-          String timerText = "";
-          if (isOnline) {
-            final diff = nowMs - (loginTimestamps[key] ?? nowMs);
-            timerText = "En línea: ${formatElapsedTime(diff)}";
-          } else {
-            final diff = nowMs - (logoutTimestamps[key] ?? nowMs);
-            timerText = "Offline hace: ${formatElapsedTime(diff)}";
-          }
-
           final bottomLineColor = target.type == 'enemigo'
               ? const Color(0xFFFF5252)
-              : (isOnline ? const Color(0xFF4CAF50) : const Color(0xFF2C3848));
+              : (isOnline ? const Color(0xFF4CAF50) : const Color(0xFF232B38));
 
           return Container(
             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF151921),
+              color: const Color(0xFF161A22),
               borderRadius: BorderRadius.circular(4),
               border: Border(bottom: BorderSide(color: bottomLineColor, width: 3.5)),
             ),
             child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
               onTap: () {
                 Navigator.push(
                   context,
@@ -719,20 +763,21 @@ class _HomeScreenState extends State<HomeScreen> {
               title: Row(
                 children: [
                   Expanded(
-                    child: Text(target.name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isOnline ? Colors.white : Colors.white70)),
+                    child: Text(target.name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isOnline ? Colors.white : Colors.white70)),
                   ),
-                  Text(target.world, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: const Color(0xFF202735), borderRadius: BorderRadius.circular(3)),
+                    child: Text(target.world, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
                 ],
               ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Nivel $level – $vocation", style: const TextStyle(color: Colors.white60, fontSize: 12)),
-                  Text(timerText, style: TextStyle(color: isOnline ? const Color(0xFF00FFB2) : Colors.white38, fontSize: 10, fontFamily: 'monospace')),
-                ],
+              subtitle: Text(
+                "Nivel $level – $vocation",
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
               ),
               trailing: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white30, size: 16),
+                icon: const Icon(Icons.close, color: Colors.white24, size: 16),
                 onPressed: () => removeTarget(target.name),
               ),
             ),
@@ -741,27 +786,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
         const SizedBox(height: 12),
 
-        // 5. Bloques Boosted Creature & Boss
+        // Bloques Boosted Creature & Boss
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             children: [
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white10)),
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                  decoration: BoxDecoration(color: const Color(0xFF161A22), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white10)),
                   child: Column(
                     children: [
                       const Text("Boosted Creature", style: TextStyle(color: Colors.white70, fontSize: 12)),
                       const SizedBox(height: 6),
                       SizedBox(
-                        height: 48,
-                        child: boostedCreatureImg.isNotEmpty
-                            ? Image.network(boostedCreatureImg, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.pest_control, color: Colors.white24))
-                            : const Icon(Icons.pest_control, color: Colors.white24),
+                        height: 50,
+                        child: Image.network(boostedCreatureImg, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.pest_control, color: Colors.white24)),
                       ),
                       const SizedBox(height: 6),
-                      Text(boostedCreatureName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                      Text(boostedCreatureName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -769,20 +812,18 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white10)),
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                  decoration: BoxDecoration(color: const Color(0xFF161A22), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white10)),
                   child: Column(
                     children: [
                       const Text("Boosted Boss", style: TextStyle(color: Colors.white70, fontSize: 12)),
                       const SizedBox(height: 6),
                       SizedBox(
-                        height: 48,
-                        child: boostedBossImg.isNotEmpty
-                            ? Image.network(boostedBossImg, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.shield, color: Colors.white24))
-                            : const Icon(Icons.shield, color: Colors.white24),
+                        height: 50,
+                        child: Image.network(boostedBossImg, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.shield, color: Colors.white24)),
                       ),
                       const SizedBox(height: 6),
-                      Text(boostedBossName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                      Text(boostedBossName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -793,44 +834,55 @@ class _HomeScreenState extends State<HomeScreen> {
 
         const SizedBox(height: 14),
 
-        // 6. Tarjeta Rashid
+        // Tarjeta de Rashid idéntica a Tibia Live
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white12)),
+          decoration: BoxDecoration(
+            color: const Color(0xFF161A22),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: Colors.white12),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-                color: const Color(0xFF0D1016),
+                color: const Color(0xFF0F1218),
                 child: const Text("Todos los mundos", style: TextStyle(color: Colors.white70, fontSize: 12)),
               ),
-              Container(
-                height: 110,
+              SizedBox(
+                height: 125,
                 width: double.infinity,
-                color: const Color(0xFF4A3E20),
                 child: Stack(
                   children: [
+                    Positioned.fill(
+                      child: Container(color: const Color(0xFF264C8A)),
+                    ),
                     Positioned(
-                      left: 14,
-                      top: 14,
-                      child: Container(
-                        width: 120,
-                        height: 80,
-                        decoration: BoxDecoration(color: const Color(0xFFD2B57B), border: Border.all(color: Colors.black45)),
-                        child: CustomPaint(painter: MinimapHousesPainter()),
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: 170,
+                      child: ClipRRect(
+                        child: Image.network(
+                          rData['map_url']!,
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
+                          errorBuilder: (_, __, ___) => Container(color: const Color(0xFFC7A762)),
+                        ),
                       ),
                     ),
                     Positioned(
-                      right: 35,
-                      top: 20,
+                      right: 38,
+                      top: 25,
                       child: Image.network(
                         "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=146&addons=0&head=78&body=106&legs=58&feet=76&direction=3",
-                        width: 58,
-                        height: 58,
+                        width: 65,
+                        height: 65,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const Text("🚶", style: TextStyle(fontSize: 28)),
+                        filterQuality: FilterQuality.none,
+                        errorBuilder: (_, __, ___) => const Text("🚶", style: TextStyle(fontSize: 32)),
                       ),
                     ),
                   ],
@@ -838,14 +890,17 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                color: const Color(0xFF1E2634),
-                child: const Text("Rashid esta en Darashia", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 12),
+                color: const Color(0xFF1E3A6E),
+                child: Text(
+                  "Rashid esta en ${rData['city']}",
+                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 25),
       ],
     );
   }
@@ -855,14 +910,14 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: () => setState(() => currentFilter = label),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF00FFB2) : const Color(0xFF151921),
+          color: isSelected ? const Color(0xFF00FFB2) : const Color(0xFF161A22),
           borderRadius: BorderRadius.circular(3),
         ),
         child: Text(
           label,
-          style: TextStyle(fontFamily: 'monospace', fontSize: 9, fontWeight: FontWeight.bold, color: isSelected ? Colors.black : Colors.white60),
+          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isSelected ? Colors.black : Colors.white60),
         ),
       ),
     );
@@ -870,7 +925,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // -------------------------------------------------------------
-// PANTALLA DE DETALLE COMPLETO (INFORMACIÓN DEL PERSONAJE)
+// PANTALLA DE DETALLE COMPLETO DEL PERSONAJE
 // -------------------------------------------------------------
 class CharacterDetailScreen extends StatefulWidget {
   final TrackTarget target;
@@ -911,12 +966,12 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF151A24),
+        backgroundColor: const Color(0xFF161A22),
         title: Text("Nota para ${widget.target.name}", style: const TextStyle(color: Color(0xFF00FFB2), fontSize: 14)),
         content: TextField(
           controller: controller,
           style: const TextStyle(color: Colors.white, fontSize: 13),
-          decoration: const InputDecoration(hintText: "Ej: Caza en Asuras a las 20:00...", hintStyle: TextStyle(color: Colors.white30)),
+          decoration: const InputDecoration(hintText: "Escribe una nota táctica...", hintStyle: TextStyle(color: Colors.white30)),
         ),
         actions: [
           TextButton(child: const Text("CANCELAR", style: TextStyle(color: Colors.grey)), onPressed: () => Navigator.pop(ctx)),
@@ -935,101 +990,39 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
   }
 
-  void notificationsConfigDialog() async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = widget.target.name.toLowerCase();
-    bool notifLogin = prefs.getBool('mute_login_$key') != true;
-    bool notifLogout = prefs.getBool('mute_logout_$key') != true;
-
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: const Color(0xFF151A24),
-          title: Text("Notificaciones para ${widget.target.name}", style: const TextStyle(color: Color(0xFF00FFB2), fontSize: 13, fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SwitchListTile(
-                title: const Text("Notificaciones de login", style: TextStyle(fontSize: 12)),
-                value: notifLogin,
-                activeColor: const Color(0xFF00FFB2),
-                onChanged: (val) => setDialogState(() => notifLogin = val),
-              ),
-              SwitchListTile(
-                title: const Text("Notificaciones de logout", style: TextStyle(fontSize: 12)),
-                value: notifLogout,
-                activeColor: const Color(0xFF00FFB2),
-                onChanged: (val) => setDialogState(() => notifLogout = val),
-              ),
-              const ListTile(
-                title: Text("Notificaciones de subida de nivel", style: TextStyle(fontSize: 12)),
-                trailing: Icon(Icons.check_circle, color: Color(0xFF00FFB2), size: 20),
-                subtitle: Text("Desbloqueado PRO", style: TextStyle(fontSize: 10, color: Color(0xFF00FFB2))),
-              ),
-              const ListTile(
-                title: Text("Notificaciones de muerte", style: TextStyle(fontSize: 12)),
-                trailing: Icon(Icons.check_circle, color: Color(0xFF00FFB2), size: 20),
-                subtitle: Text("Desbloqueado PRO", style: TextStyle(fontSize: 10, color: Color(0xFF00FFB2))),
-              ),
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FFB2), foregroundColor: Colors.black),
-              onPressed: () async {
-                await prefs.setBool('mute_login_$key', !notifLogin);
-                await prefs.setBool('mute_logout_$key', !notifLogout);
-                Navigator.pop(ctx);
-              },
-              child: const Text("GUARDAR"),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final raw = widget.fullData['raw'] ?? {};
     final level = widget.isOnline ? (widget.onlineData?['level'] ?? widget.fullData['level'] ?? 0) : (widget.fullData['level'] ?? 0);
     final vocation = widget.isOnline ? (widget.onlineData?['vocation'] ?? widget.fullData['vocation'] ?? '') : (widget.fullData['vocation'] ?? '');
     final residence = raw['town'] ?? 'Thais';
-    final accountStatus = raw['account_status'] ?? 'Premium';
+    final accountStatus = raw['account_status'] ?? 'Premium Account';
     final deaths = (widget.fullData['deaths'] as List? ?? []);
-    final houses = (widget.fullData['houses'] as List? ?? []);
     final guild = (widget.fullData['guild'] as Map? ?? {});
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Información del personaje", style: TextStyle(fontSize: 14)),
+        title: const Text("Información del personaje", style: TextStyle(fontSize: 15)),
         actions: [
-          IconButton(icon: const Icon(Icons.notifications), onPressed: notificationsConfigDialog),
-          PopupMenuButton<String>(
-            color: const Color(0xFF151A24),
-            onSelected: (val) {
-              if (val == 'note') editNoteDialog();
-              if (val == 'share') {
-                Clipboard.setData(ClipboardData(text: "https://www.tibia.com/community/?subtopic=characters&name=${widget.target.name}"));
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Enlace oficial copiado al portapapeles")));
-              }
+          IconButton(
+            icon: const Icon(Icons.edit_note),
+            onPressed: editNoteDialog,
+          ),
+          IconButton(
+            icon: const Icon(Icons.share),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: "https://www.tibia.com/community/?subtopic=characters&name=${widget.target.name}"));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Enlace oficial copiado")));
             },
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: 'note', child: Text("Editar nota")),
-              const PopupMenuItem(value: 'share', child: Text("Compartir enlace")),
-            ],
           )
         ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          // Cabecera idéntica a Tibia Live
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(4)),
+            decoration: BoxDecoration(color: const Color(0xFF161A22), borderRadius: BorderRadius.circular(4)),
             child: Row(
               children: [
                 Image.network(
@@ -1056,11 +1049,10 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           ),
           const SizedBox(height: 10),
 
-          // Mini mapa de residencia
           Container(
-            height: 140,
+            height: 135,
             width: double.infinity,
-            decoration: BoxDecoration(color: const Color(0xFF192A44), borderRadius: BorderRadius.circular(4)),
+            decoration: BoxDecoration(color: const Color(0xFF16253D), borderRadius: BorderRadius.circular(4)),
             child: Stack(
               children: [
                 Positioned.fill(
@@ -1073,9 +1065,9 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.location_city, color: Color(0xFF00FFB2), size: 30),
+                      const Icon(Icons.location_city, color: Color(0xFF00FFB2), size: 28),
                       const SizedBox(height: 4),
-                      Text("Residencia: $residence".toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 1.2)),
+                      Text("CIUDAD: $residence".toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 1.0)),
                     ],
                   ),
                 )
@@ -1084,7 +1076,6 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           ),
           const SizedBox(height: 10),
 
-          // Rejilla de Información
           Row(
             children: [
               _infoTile("Residencia", residence),
@@ -1095,21 +1086,20 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              _infoTile("Estado de cuenta", accountStatus),
+              _infoTile("Estado de la cuenta", accountStatus),
               const SizedBox(width: 8),
               _infoTile("Estado", widget.isOnline ? "Online" : "Desconectado", isOnlineColor: widget.isOnline),
             ],
           ),
           const SizedBox(height: 10),
 
-          // Nota
           if (note.isNotEmpty)
             Container(
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: const Color(0xFF151E2D), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFF00FFB2).withOpacity(0.4))),
+              decoration: BoxDecoration(color: const Color(0xFF151D2A), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFF00FFB2).withOpacity(0.3))),
               child: Row(
                 children: [
-                  const Icon(Icons.note_alt, color: Color(0xFF00FFB2), size: 18),
+                  const Icon(Icons.note, color: Color(0xFF00FFB2), size: 16),
                   const SizedBox(width: 8),
                   Expanded(child: Text("Nota: $note", style: const TextStyle(color: Colors.white, fontSize: 12))),
                 ],
@@ -1117,28 +1107,9 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
             ),
           const SizedBox(height: 10),
 
-          // Casas
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(4)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("Casas", style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 6),
-                if (houses.isEmpty)
-                  const Text("Sin casas", style: TextStyle(color: Colors.white38, fontSize: 12))
-                else
-                  ...houses.map((h) => Text("🏠 ${h['name']} (${h['town']}) – ${h['rent']} gp/mes", style: const TextStyle(color: Colors.white, fontSize: 12))),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          // Muertes con PK atacantes
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(4)),
+            decoration: BoxDecoration(color: const Color(0xFF161A22), borderRadius: BorderRadius.circular(4)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1155,7 +1126,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                     return Container(
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: const Color(0xFF0E121A), borderRadius: BorderRadius.circular(4)),
+                      decoration: BoxDecoration(color: const Color(0xFF0F1218), borderRadius: BorderRadius.circular(4)),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1169,12 +1140,12 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                           const SizedBox(height: 4),
                           Text(
                             isPkMass ? "Muerto por: ${killers.length} jugadores" : "Muerto por: ${killers.isNotEmpty ? killers.first['name'] : 'Criatura'}",
-                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
                           ),
                           if (isPkMass) ...[
                             const SizedBox(height: 6),
                             Wrap(
-                              spacing: 8,
+                              spacing: 6,
                               runSpacing: 4,
                               children: killers.map((k) {
                                 return Container(
@@ -1201,7 +1172,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(color: const Color(0xFF151921), borderRadius: BorderRadius.circular(4)),
+        decoration: BoxDecoration(color: const Color(0xFF161A22), borderRadius: BorderRadius.circular(4)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1216,7 +1187,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
 }
 
 // -------------------------------------------------------------
-// PANTALLA: MUNDOS
+// PANTALLAS SECUNDARIAS
 // -------------------------------------------------------------
 class WorldsScreen extends StatefulWidget {
   const WorldsScreen({super.key});
@@ -1273,7 +1244,7 @@ class _WorldsScreenState extends State<WorldsScreen> {
                   Text("${w['pvp_type']} – ${w['location']}", style: const TextStyle(color: Colors.white38, fontSize: 11)),
                 ],
               ),
-              Text("${w['players_online']} online", style: const TextStyle(color: Color(0xFF00FFB2), fontWeight: FontWeight.bold, fontSize: 12, fontFamily: 'monospace')),
+              Text("${w['players_online']} online", style: const TextStyle(color: Color(0xFF00FFB2), fontWeight: FontWeight.bold, fontSize: 12)),
             ],
           ),
         );
@@ -1282,9 +1253,6 @@ class _WorldsScreenState extends State<WorldsScreen> {
   }
 }
 
-// -------------------------------------------------------------
-// PANTALLA: COMPARTIR EXPERIENCIA (PARTY SHARE CALCULATOR)
-// -------------------------------------------------------------
 class PartyShareCalculatorScreen extends StatefulWidget {
   const PartyShareCalculatorScreen({super.key});
 
@@ -1348,9 +1316,6 @@ class _PartyShareCalculatorScreenState extends State<PartyShareCalculatorScreen>
   }
 }
 
-// -------------------------------------------------------------
-// PANTALLA: CALCULADORA DE BLESSINGS
-// -------------------------------------------------------------
 class BlessingsCalculatorScreen extends StatefulWidget {
   const BlessingsCalculatorScreen({super.key});
 
@@ -1360,7 +1325,6 @@ class BlessingsCalculatorScreen extends StatefulWidget {
 
 class _BlessingsCalculatorScreenState extends State<BlessingsCalculatorScreen> {
   final TextEditingController _levelCtrl = TextEditingController(text: "300");
-  bool promoted = true;
 
   int calculateTotalBless(int lvl) {
     int regularCost = 20000;
@@ -1407,9 +1371,6 @@ class _BlessingsCalculatorScreenState extends State<BlessingsCalculatorScreen> {
   }
 }
 
-// -------------------------------------------------------------
-// PANTALLA: EVENTOS
-// -------------------------------------------------------------
 class EventsScreen extends StatelessWidget {
   const EventsScreen({super.key});
 
@@ -1444,7 +1405,6 @@ class EventsScreen extends StatelessWidget {
   }
 }
 
-// Sparkline
 class SparklinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -1457,31 +1417,6 @@ class SparklinePainter extends CustomPainter {
     path.moveTo(0, size.height * 0.4);
     path.cubicTo(size.width * 0.35, size.height * 0.1, size.width * 0.65, size.height * 0.9, size.width, size.height * 0.6);
     canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// Minimapa
-class MinimapHousesPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final housePaint = Paint()..color = const Color(0xFF8B4513)..style = PaintingStyle.fill;
-    final wallPaint = Paint()..color = Colors.black87..style = PaintingStyle.stroke..strokeWidth = 1.0;
-
-    final houses = [
-      Rect.fromLTWH(10, 10, 18, 18),
-      Rect.fromLTWH(35, 12, 22, 16),
-      Rect.fromLTWH(68, 16, 18, 20),
-      Rect.fromLTWH(15, 38, 20, 18),
-      Rect.fromLTWH(48, 40, 24, 20),
-    ];
-
-    for (var h in houses) {
-      canvas.drawRect(h, housePaint);
-      canvas.drawRect(h, wallPaint);
-    }
   }
 
   @override
