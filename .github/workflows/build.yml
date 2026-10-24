@@ -29,8 +29,8 @@ jobs:
           cp RadarService.kt app/android/app/src/main/kotlin/com/tactical/tibia/spy_ferobra/RadarService.kt
           cp MainActivity.kt app/android/app/src/main/kotlin/com/tactical/tibia/spy_ferobra/MainActivity.kt
           
-          # Inyectar permisos de Android
-          sed -i 's/<application/    <uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.VIBRATE"\/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"\/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"\/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"\/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"\/>\n    <application/' app/android/app/src/main/AndroidManifest.xml
+          # Inyectar permisos de Android y habilitar tráfico de imágenes sin restricciones
+          sed -i 's/<application/    <uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.VIBRATE"\/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"\/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"\/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"\/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"\/>\n    <application android:usesCleartextTraffic="true"/' app/android/app/src/main/AndroidManifest.xml
           
           # Nombre oficial "Spy Ferobra" e inyección del servicio
           sed -i 's/android:label=".*"/android:label="Spy Ferobra"/' app/android/app/src/main/AndroidManifest.xml

@@ -62,7 +62,7 @@ class TacticalAudio {
 }
 
 // -------------------------------------------------------------
-// HELPER GLOBAL: MINIMAPAS REALES DE CADA CIUDAD DE TIBIA
+// HELPER: MINIMAPAS REALES DE CADA CIUDAD DE TIBIA
 // -------------------------------------------------------------
 String getCityMinimapUrl(String city) {
   final clean = city.trim().toLowerCase();
@@ -137,7 +137,7 @@ class TrackTarget {
 }
 
 // -------------------------------------------------------------
-// CONTENEDOR PRINCIPAL CON MENÚ LATERAL
+// CONTENEDOR CON DRAWER LATERAL
 // -------------------------------------------------------------
 class MainDrawerScreen extends StatefulWidget {
   const MainDrawerScreen({super.key});
@@ -203,13 +203,13 @@ class _MainDrawerScreenState extends State<MainDrawerScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text("SPY FEROBRA", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                          Text("MINIMAPAS REALES // MULTI-MUNDO", style: TextStyle(color: Color(0xFF00FFB2), fontSize: 10, fontWeight: FontWeight.bold)),
+                          Text("VIGILANCIA DE WAR // PRO", style: TextStyle(color: Color(0xFF00FFB2), fontSize: 10, fontWeight: FontWeight.bold)),
                         ],
                       )
                     ],
                   ),
                   const SizedBox(height: 10),
-                  const Text("Rastrea cualquier personaje con su minimapa real", style: TextStyle(color: Colors.white54, fontSize: 11)),
+                  const Text("Alertas de muerte por voz y rastreo sin límites", style: TextStyle(color: Colors.white54, fontSize: 11)),
                 ],
               ),
             ),
@@ -252,7 +252,7 @@ class _MainDrawerScreenState extends State<MainDrawerScreen> {
 }
 
 // -------------------------------------------------------------
-// PANTALLA PRINCIPAL: HOME
+// PANTALLA PRINCIPAL: HOME (INICIA CON LISTA LIMPIA)
 // -------------------------------------------------------------
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -263,12 +263,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   static const platform = MethodChannel('com.tactical.tibia/radar');
-  List<TrackTarget> targets = [
-    TrackTarget(name: 'Markinjr', type: 'amigo', world: 'Ferobra'),
-    TrackTarget(name: 'Fingor', type: 'amigo', world: 'Ferobra'),
-    TrackTarget(name: 'Magnustis', type: 'amigo', world: 'Ferobra'),
-    TrackTarget(name: 'Nephasto Hunted', type: 'enemigo', world: 'Ferobra'),
-  ];
+
+  // LISTA LIMPIA DESDE CERO (SIN PERSONAJES PRECARGADOS)
+  List<TrackTarget> targets = [];
 
   final TextEditingController _nameController = TextEditingController();
   String currentFilter = 'TODOS';
@@ -328,7 +325,7 @@ class _HomeScreenState extends State<HomeScreen> {
     fetchBoostedData();
     syncNativeService();
     scanAllWorlds();
-    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _timer = Timer.periodic(const Duration(seconds: 25), (_) {
       scanAllWorlds();
       fetchGlobalPlayersOnline();
     });
@@ -387,7 +384,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final res = await http.get(
         Uri.parse('https://api.tibiadata.com/v4/character/${Uri.encodeComponent(charName)}'),
-        headers: {'User-Agent': 'Mozilla/5.0 (Android; Mobile)'},
+        headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36'},
       ).timeout(const Duration(seconds: 10));
 
       if (res.statusCode == 200) {
@@ -453,7 +450,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> scanAllWorlds() async {
     setState(() => isScanning = true);
     final worldsToScan = targets.map((t) => t.world).toSet();
-    if (worldsToScan.isEmpty) worldsToScan.add('Ferobra');
+    if (worldsToScan.isEmpty) {
+      setState(() => isScanning = false);
+      return;
+    }
 
     Map<String, dynamic> newOnlineMap = {};
 
@@ -461,7 +461,7 @@ class _HomeScreenState extends State<HomeScreen> {
       try {
         final response = await http.get(
           Uri.parse('https://api.tibiadata.com/v4/world/$w'),
-          headers: {'User-Agent': 'Mozilla/5.0 (Android; Mobile)'},
+          headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36'},
         ).timeout(const Duration(seconds: 10));
 
         if (response.statusCode == 200) {
@@ -505,6 +505,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // DETECCIÓN AUTOMÁTICA UNIVERSAL DE SERVIDOR
   Future<void> addTargetAuto(String type) async {
     final text = _nameController.text.trim();
     if (text.isEmpty) return;
@@ -522,7 +523,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final res = await http.get(
         Uri.parse('https://api.tibiadata.com/v4/character/${Uri.encodeComponent(text)}'),
-        headers: {'User-Agent': 'Mozilla/5.0 (Android; Mobile)'},
+        headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36'},
       ).timeout(const Duration(seconds: 10));
 
       if (res.statusCode == 200) {
@@ -551,6 +552,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
           await syncNativeService();
           scanAllWorlds();
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("✅ Añadido: $officialName ($officialWorld)"),
+                backgroundColor: const Color(0xFF00FFB2),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
           return;
         }
       }
@@ -572,6 +583,7 @@ class _HomeScreenState extends State<HomeScreen> {
     syncNativeService();
   }
 
+  // ROPA TRICOLOR (AMARILLO, AZUL Y ROJO ÚNICAMENTE EN LA VESTIMENTA)
   Widget _getVocationWalkingSprite(String? vocation, bool isOnline) {
     final voc = (vocation ?? '').toLowerCase();
     int looktype = 128;
@@ -586,7 +598,8 @@ class _HomeScreenState extends State<HomeScreen> {
       looktype = 144;
     }
 
-    final animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=$looktype&addons=3&head=79&body=86&legs=94&feet=94&direction=3";
+    // head=0 (piel/pelo natural), body=86 (Azul), legs=94 (Rojo), feet=79 (Detalles amarillo tricolor)
+    final animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=$looktype&addons=3&head=0&body=86&legs=94&feet=79&direction=3";
 
     return Opacity(
       opacity: isOnline ? 1.0 : 0.45,
@@ -601,33 +614,34 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // BOSSES Y MONSTRUOS ANIMADOS EN VIVO
   Widget _buildLiveAnimatedCreature(String creatureName) {
     final clean = creatureName
         .replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '')
         .trim()
         .replaceAll(' ', '_');
 
-    final gifUrl = "https://tibia.fandom.com/wiki/Special:FilePath/$clean.gif";
+    final gifUrl = "https://www.tibiawiki.com.br/Special:FilePath/$clean.gif";
 
     return Image.network(
       gifUrl,
       fit: BoxFit.contain,
       filterQuality: FilterQuality.none,
       headers: const {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36',
       },
       errorBuilder: (_, __, ___) => Image.network(
-        "https://tibia.fandom.com/wiki/Special:FilePath/Demon.gif",
+        "https://www.tibiawiki.com.br/Special:FilePath/Demon.gif",
         fit: BoxFit.contain,
         headers: const {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36',
         },
         errorBuilder: (_, __, ___) => const Icon(Icons.pest_control, color: Colors.white30, size: 32),
       ),
     );
   }
 
-  // MINIMAPAS EXCLUSIVOS PARA RASHID
+  // RASHID OFICIAL Y SUS MINIMAPAS
   Map<String, String> getRashidData() {
     final now = DateTime.now();
     switch (now.weekday) {
@@ -646,6 +660,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final displayList = filteredTargets;
     final rData = getRashidData();
+
+    // RASHID ORIGINAL AUTÉNTICO CAMINANDO EN DIAGONAL
+    const rashidOriginalWalkingUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=146&addons=0&head=78&body=106&legs=58&feet=76&direction=3";
 
     return ListView(
       padding: EdgeInsets.zero,
@@ -699,7 +716,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // Buscador universal
+        // Buscador universal automático
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
           child: Column(
@@ -769,64 +786,78 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // Lista de Personajes
-        ...displayList.map((target) {
-          final key = target.name.toLowerCase();
-          final isOnline = onlinePlayersData.containsKey(key);
-          final full = characterFullData[key] ?? {};
-          final level = isOnline ? (onlinePlayersData[key]['level'] ?? 0) : (full['level'] ?? 0);
-          final vocation = isOnline ? (onlinePlayersData[key]['vocation'] ?? '') : (full['vocation'] ?? 'Cargando...');
-
-          final bottomLineColor = target.type == 'enemigo'
-              ? const Color(0xFFFF5252)
-              : (isOnline ? const Color(0xFF4CAF50) : const Color(0xFF232B38));
-
-          return Container(
-            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF161A22),
-              borderRadius: BorderRadius.circular(4),
-              border: Border(bottom: BorderSide(color: bottomLineColor, width: 3.5)),
+        // Lista de Personajes (Muestra aviso si está vacía)
+        if (displayList.isEmpty)
+          Container(
+            margin: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: const Color(0xFF161A22), borderRadius: BorderRadius.circular(4)),
+            child: const Center(
+              child: Text(
+                "Sin objetivos en vigilancia.\nEscribe el nombre de tu amigo o enemigo arriba para agregarlo.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white38, fontSize: 12),
+              ),
             ),
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CharacterDetailScreen(
-                      target: target,
-                      fullData: full,
-                      isOnline: isOnline,
-                      onlineData: onlinePlayersData[key],
+          )
+        else
+          ...displayList.map((target) {
+            final key = target.name.toLowerCase();
+            final isOnline = onlinePlayersData.containsKey(key);
+            final full = characterFullData[key] ?? {};
+            final level = isOnline ? (onlinePlayersData[key]['level'] ?? 0) : (full['level'] ?? 0);
+            final vocation = isOnline ? (onlinePlayersData[key]['vocation'] ?? '') : (full['vocation'] ?? 'Cargando...');
+
+            final bottomLineColor = target.type == 'enemigo'
+                ? const Color(0xFFFF5252)
+                : (isOnline ? const Color(0xFF4CAF50) : const Color(0xFF232B38));
+
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF161A22),
+                borderRadius: BorderRadius.circular(4),
+                border: Border(bottom: BorderSide(color: bottomLineColor, width: 3.5)),
+              ),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CharacterDetailScreen(
+                        target: target,
+                        fullData: full,
+                        isOnline: isOnline,
+                        onlineData: onlinePlayersData[key],
+                      ),
                     ),
-                  ),
-                );
-              },
-              leading: _getVocationWalkingSprite(vocation, isOnline),
-              title: Row(
-                children: [
-                  Expanded(
-                    child: Text(target.name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isOnline ? Colors.white : Colors.white70)),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(color: const Color(0xFF202735), borderRadius: BorderRadius.circular(3)),
-                    child: Text(target.world, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
-                  ),
-                ],
+                  );
+                },
+                leading: _getVocationWalkingSprite(vocation, isOnline),
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Text(target.name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: isOnline ? Colors.white : Colors.white70)),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: const Color(0xFF202735), borderRadius: BorderRadius.circular(3)),
+                      child: Text(target.world, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                subtitle: Text(
+                  "Nivel $level – $vocation",
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white24, size: 16),
+                  onPressed: () => removeTarget(target.name),
+                ),
               ),
-              subtitle: Text(
-                "Nivel $level – $vocation",
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-              trailing: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white24, size: 16),
-                onPressed: () => removeTarget(target.name),
-              ),
-            ),
-          );
-        }),
+            );
+          }),
 
         const SizedBox(height: 12),
 
@@ -879,36 +910,35 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 14),
 
         // -------------------------------------------------------------
-        // TARJETA DE RASHID CON MINIMAPA REAL Y RASHID CAMINANDO
+        // TARJETA DE RASHID PEQUEÑA, COMPACTA Y SIN LÍNEA BLANCA
         // -------------------------------------------------------------
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
             color: const Color(0xFF161A22),
             borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: Colors.white12),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
                 color: const Color(0xFF0F1218),
-                child: const Text("Todos los mundos", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                child: const Text("Todos los mundos", style: TextStyle(color: Colors.white70, fontSize: 11)),
               ),
               SizedBox(
-                height: 125,
+                height: 80,
                 width: double.infinity,
                 child: Stack(
                   children: [
                     Positioned.fill(child: Container(color: const Color(0xFF264C8A))),
-                    // MINIMAPA REAL DE LA CIUDAD DE RASHID
+                    // Minimapa de la ciudad
                     Positioned(
                       left: 0,
                       top: 0,
                       bottom: 0,
-                      width: 175,
+                      width: 140,
                       child: ClipRRect(
                         child: Image.network(
                           rData['map_url']!,
@@ -916,35 +946,36 @@ class _HomeScreenState extends State<HomeScreen> {
                           alignment: Alignment.center,
                           filterQuality: FilterQuality.none,
                           headers: const {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36',
                           },
                           errorBuilder: (_, __, ___) => Container(color: const Color(0xFFC7A762)),
                         ),
                       ),
                     ),
-                    // RASHID CAMINANDO EN DIAGONAL
+                    // Rashid Original Caminando
                     Positioned(
-                      right: 38,
-                      top: 25,
+                      right: 25,
+                      top: 12,
                       child: Image.network(
-                        "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=146&addons=0&head=78&body=106&legs=58&feet=76&direction=3",
-                        width: 65,
-                        height: 65,
+                        rashidOriginalWalkingUrl,
+                        width: 55,
+                        height: 55,
                         fit: BoxFit.contain,
                         filterQuality: FilterQuality.none,
-                        errorBuilder: (_, __, ___) => const Text("🚶", style: TextStyle(fontSize: 32)),
+                        errorBuilder: (_, __, ___) => const Text("🚶", style: TextStyle(fontSize: 26)),
                       ),
                     ),
                   ],
                 ),
               ),
+              // Barra con el texto 100% visible sin cortes
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 12),
+                padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
                 color: const Color(0xFF1E3A6E),
                 child: Text(
                   "Rashid esta en ${rData['city']}",
-                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -975,7 +1006,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // -------------------------------------------------------------
-// PANTALLA DETALLE: MINIMAPA REAL DE LA CIUDAD DE RESIDENCIA
+// PANTALLA DETALLE COMPLETO
 // -------------------------------------------------------------
 class CharacterDetailScreen extends StatefulWidget {
   final TrackTarget target;
@@ -1046,7 +1077,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
         .trim()
         .replaceAll(' ', '_');
 
-    final gifUrl = "https://tibia.fandom.com/wiki/Special:FilePath/$clean.gif";
+    final gifUrl = "https://www.tibiawiki.com.br/Special:FilePath/$clean.gif";
 
     return Image.network(
       gifUrl,
@@ -1055,15 +1086,15 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       fit: BoxFit.contain,
       filterQuality: FilterQuality.none,
       headers: const {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36',
       },
       errorBuilder: (_, __, ___) => Image.network(
-        "https://tibia.fandom.com/wiki/Special:FilePath/Demon.gif",
+        "https://www.tibiawiki.com.br/Special:FilePath/Demon.gif",
         width: 44,
         height: 44,
         fit: BoxFit.contain,
         headers: const {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36',
         },
         errorBuilder: (_, __, ___) => const Icon(Icons.dangerous, color: Colors.redAccent, size: 28),
       ),
@@ -1097,14 +1128,13 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          // Tarjeta superior
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: const Color(0xFF161A22), borderRadius: BorderRadius.circular(4)),
             child: Row(
               children: [
                 Image.network(
-                  "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=131&addons=3&head=79&body=86&legs=94&feet=94&direction=3",
+                  "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=131&addons=3&head=0&body=86&legs=94&feet=79&direction=3",
                   width: 50,
                   height: 50,
                   fit: BoxFit.contain,
@@ -1127,11 +1157,9 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           ),
           const SizedBox(height: 10),
 
-          // -------------------------------------------------------------
-          // MINIMAPA REAL Y EXCLUSIVO DE LA CIUDAD DE RESIDENCIA
-          // -------------------------------------------------------------
+          // Minimapa de residencia
           Container(
-            height: 160,
+            height: 150,
             width: double.infinity,
             decoration: BoxDecoration(
               color: const Color(0xFF16253D),
@@ -1140,23 +1168,17 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(4),
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: Image.network(
-                      getCityMinimapUrl(residence),
-                      fit: BoxFit.cover,
-                      alignment: Alignment.center,
-                      filterQuality: FilterQuality.none,
-                      headers: const {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-                      },
-                      errorBuilder: (_, __, ___) => const Center(
-                        child: Icon(Icons.location_city, color: Color(0xFF00FFB2), size: 36),
-                      ),
-                    ),
-                  ),
-                ],
+              child: Image.network(
+                getCityMinimapUrl(residence),
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                filterQuality: FilterQuality.none,
+                headers: const {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36',
+                },
+                errorBuilder: (_, __, ___) => const Center(
+                  child: Icon(Icons.location_city, color: Color(0xFF00FFB2), size: 36),
+                ),
               ),
             ),
           ),
@@ -1263,7 +1285,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                                   child: Column(
                                     children: [
                                       Image.network(
-                                        "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=131&addons=3&head=79&body=86&legs=94&feet=94&direction=3",
+                                        "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=131&addons=3&head=0&body=86&legs=94&feet=79&direction=3",
                                         width: 42,
                                         height: 42,
                                         fit: BoxFit.contain,

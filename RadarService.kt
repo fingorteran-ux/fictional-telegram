@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit
 class RadarService : Service(), TextToSpeech.OnInitListener {
     private var scheduler: ScheduledExecutorService? = null
     private val previousOnline = HashMap<String, HashSet<String>>()
+    private val lastKnownDeathTimes = HashMap<String, String>()
     private var isFirstRun = true
     private var tts: TextToSpeech? = null
     private var ttsReady = false
@@ -73,7 +74,7 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
             return START_STICKY
         }
 
-        val notification = createPersistentNotification("Spy Ferobra: Vigilancia 24/7 en segundo plano")
+        val notification = createPersistentNotification("Spy Ferobra: Vigilancia 24/7 activa")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(1001, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
@@ -100,7 +101,7 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
                 "Alertas Tácticas de Voz",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Alertas de voz para entradas y salidas"
+                description = "Alertas de voz para entradas, salidas y muertes"
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 180, 100, 180)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
@@ -138,11 +139,11 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
         scheduler = Executors.newSingleThreadScheduledExecutor()
         scheduler?.scheduleWithFixedDelay({
             try {
-                scanWorlds()
+                scanWorldsAndDeaths()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
-        }, 2, 30, TimeUnit.SECONDS)
+        }, 2, 25, TimeUnit.SECONDS)
     }
 
     private fun speakText(text: String) {
@@ -160,7 +161,7 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
     private fun playOneSecondSiren() {
         Thread {
             try {
-                Thread.sleep(2000)
+                Thread.sleep(1800)
                 val sampleRate = 22050
                 val durationSeconds = 1.0
                 val totalSamples = (sampleRate * durationSeconds).toInt()
@@ -169,7 +170,7 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
 
                 for (i in 0 until totalSamples) {
                     val t = i.toDouble() / sampleRate
-                    val freq = 700.0 + 350.0 * Math.sin(2.0 * Math.PI * 1.5 * t)
+                    val freq = 750.0 + 350.0 * Math.sin(2.0 * Math.PI * 1.5 * t)
                     phase += 2.0 * Math.PI * freq / sampleRate
                     buffer[i] = (Math.sin(phase) * 32767 * 0.95).toInt().toShort()
                 }
@@ -190,7 +191,7 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
         }.start()
     }
 
-    private fun scanWorlds() {
+    private fun scanWorldsAndDeaths() {
         var targetsArray = JSONArray(targetsInMemory)
         if (targetsArray.length() == 0) {
             val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
@@ -210,15 +211,16 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
             if (w.isNotEmpty()) worldsToScan.add(w)
         }
 
+        // 1. Escaneo de Conexión y Desconexión por mundo
         for (worldName in worldsToScan) {
             val currentOnlineMap = HashMap<String, String>()
             try {
                 val url = URL("https://api.tibiadata.com/v4/world/$worldName")
                 val conn = url.openConnection() as HttpURLConnection
-                conn.connectTimeout = 8000
-                conn.readTimeout = 8000
+                conn.connectTimeout = 7000
+                conn.readTimeout = 7000
                 conn.requestMethod = "GET"
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36")
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
 
                 if (conn.responseCode == 200) {
                     val reader = BufferedReader(InputStreamReader(conn.inputStream))
@@ -262,22 +264,22 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
                     val muteLogout = prefs.getBoolean("flutter.mute_logout_$targetName", false) || prefs.getBoolean("mute_logout_$targetName", false)
                     val charDisplay = targetObj.optString("name").trim()
 
+                    // LOGIN
                     if (currentOnlineMap.containsKey(targetName) && !prevOnline.contains(targetName)) {
                         if (!muteLogin) {
                             val msg = if (targetType == "amigo") "Tu amigo $charDisplay en $targetWorld conectó." else "Tu enemigo $charDisplay en $targetWorld conectó."
                             speakText(msg)
-                            showEventNotification(charDisplay, targetWorld, "conectó", targetType == "amigo")
+                            showNotification(charDisplay, targetWorld, "conectó", targetType == "amigo")
                         }
                     }
 
+                    // LOGOUT
                     if (!currentOnlineMap.containsKey(targetName) && prevOnline.contains(targetName)) {
                         if (!muteLogout) {
                             val msg = if (targetType == "amigo") "Tu amigo $charDisplay en $targetWorld desconectó." else "Tu enemigo $charDisplay en $targetWorld desconectó."
                             speakText(msg)
-                            if (targetType != "amigo") {
-                                playOneSecondSiren()
-                            }
-                            showEventNotification(charDisplay, targetWorld, "desconectó", targetType == "amigo")
+                            if (targetType != "amigo") playOneSecondSiren()
+                            showNotification(charDisplay, targetWorld, "desconectó", targetType == "amigo")
                         }
                     }
                 }
@@ -286,10 +288,68 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
             previousOnline[worldName] = HashSet(currentOnlineMap.keys)
         }
 
+        // 2. Escaneo en Vivo de Muertes (Alarma con Asesino y Nivel)
+        for (targetObj in targetObjects) {
+            val charDisplay = targetObj.optString("name").trim()
+            val targetName = charDisplay.lowercase()
+            val targetType = targetObj.optString("type", "enemigo").trim().lowercase()
+
+            try {
+                val charUrl = URL("https://api.tibiadata.com/v4/character/$targetName")
+                val charConn = charUrl.openConnection() as HttpURLConnection
+                charConn.connectTimeout = 6000
+                charConn.readTimeout = 6000
+                charConn.requestMethod = "GET"
+                charConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
+
+                if (charConn.responseCode == 200) {
+                    val reader = BufferedReader(InputStreamReader(charConn.inputStream))
+                    val sb = StringBuilder()
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) { sb.append(line) }
+                    reader.close()
+
+                    val charJson = JSONObject(sb.toString())
+                    val deathsArr = charJson.optJSONObject("character")?.optJSONArray("deaths")
+
+                    if (deathsArr != null && deathsArr.length() > 0) {
+                        val latestDeath = deathsArr.getJSONObject(0)
+                        val deathTime = latestDeath.optString("time", "")
+                        val deathLvl = latestDeath.optInt("level", 0)
+                        val killersArr = latestDeath.optJSONArray("killers")
+                        var killerName = "una criatura"
+
+                        if (killersArr != null && killersArr.length() > 0) {
+                            val k = killersArr.getJSONObject(0)
+                            killerName = k.optString("name", "una criatura")
+                                .replace(Regex("^(a |an )", RegexOption.IGNORE_CASE), "")
+                        }
+
+                        val lastKnown = lastKnownDeathTimes[targetName]
+
+                        if (!isFirstRun && lastKnown != null && lastKnown != deathTime) {
+                            // Alarma hablada exacta requerida por el usuario
+                            val deathMsg = if (targetType == "amigo") {
+                                "¡Cuidado! Tu amigo $charDisplay acaba de morir a nivel $deathLvl por $killerName."
+                            } else {
+                                "¡Atención! Tu enemigo $charDisplay acaba de morir a nivel $deathLvl por $killerName."
+                            }
+
+                            speakText(deathMsg)
+                            playOneSecondSiren()
+                            showDeathNotification(charDisplay, deathLvl, killerName, targetType == "amigo")
+                        }
+
+                        lastKnownDeathTimes[targetName] = deathTime
+                    }
+                }
+            } catch (e: Exception) {}
+        }
+
         if (isFirstRun) isFirstRun = false
     }
 
-    private fun showEventNotification(name: String, world: String, action: String, isFriend: Boolean) {
+    private fun showNotification(name: String, world: String, action: String, isFriend: Boolean) {
         wakeUpScreen()
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
         val pendingIntent = PendingIntent.getActivity(
@@ -311,6 +371,33 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .setVibrate(longArrayOf(0, 150, 100, 150))
+
+        val notifyMgr = getSystemService(NotificationManager::class.java)
+        notifyMgr?.notify((System.currentTimeMillis() % 100000).toInt(), builder.build())
+    }
+
+    private fun showDeathNotification(name: String, level: Int, killer: String, isFriend: Boolean) {
+        wakeUpScreen()
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+        val pendingIntent = PendingIntent.getActivity(
+            this, (System.currentTimeMillis() % 10000).toInt(), launchIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val title = if (isFriend) "🛡️ [MUERTE DE AMIGO]" else "💀 [ENEMIGO ELIMINADO]"
+        val text = "$name murió a nivel $level por $killer."
+
+        val builder = NotificationCompat.Builder(this, "radar_alerts_v3")
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setVibrate(longArrayOf(0, 200, 100, 200, 100, 200))
 
         val notifyMgr = getSystemService(NotificationManager::class.java)
         notifyMgr?.notify((System.currentTimeMillis() % 100000).toInt(), builder.build())
