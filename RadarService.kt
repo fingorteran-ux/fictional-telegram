@@ -211,7 +211,9 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
             if (w.isNotEmpty()) worldsToScan.add(w)
         }
 
-        // 1. Escaneo de Conexión y Desconexión por mundo
+        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+
+        // 1. Monitoreo de Logins y Logouts respetando mute individual
         for (worldName in worldsToScan) {
             val currentOnlineMap = HashMap<String, String>()
             try {
@@ -220,7 +222,7 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
                 conn.connectTimeout = 7000
                 conn.readTimeout = 7000
                 conn.requestMethod = "GET"
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36")
 
                 if (conn.responseCode == 200) {
                     val reader = BufferedReader(InputStreamReader(conn.inputStream))
@@ -251,8 +253,6 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
             val prevOnline = previousOnline[worldName] ?: HashSet()
 
             if (!isFirstRun && prevOnline.isNotEmpty()) {
-                val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-
                 for (targetObj in targetObjects) {
                     val targetName = targetObj.optString("name").trim().lowercase()
                     val targetWorld = targetObj.optString("world", "Ferobra").trim()
@@ -288,11 +288,14 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
             previousOnline[worldName] = HashSet(currentOnlineMap.keys)
         }
 
-        // 2. Escaneo en Vivo de Muertes (Alarma con Asesino y Nivel)
+        // 2. Monitoreo de Muertes respetando mute individual
         for (targetObj in targetObjects) {
             val charDisplay = targetObj.optString("name").trim()
             val targetName = charDisplay.lowercase()
             val targetType = targetObj.optString("type", "enemigo").trim().lowercase()
+            val muteDeath = prefs.getBoolean("flutter.mute_death_$targetName", false) || prefs.getBoolean("mute_death_$targetName", false)
+
+            if (muteDeath) continue
 
             try {
                 val charUrl = URL("https://api.tibiadata.com/v4/character/$targetName")
@@ -300,7 +303,7 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
                 charConn.connectTimeout = 6000
                 charConn.readTimeout = 6000
                 charConn.requestMethod = "GET"
-                charConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
+                charConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36")
 
                 if (charConn.responseCode == 200) {
                     val reader = BufferedReader(InputStreamReader(charConn.inputStream))
@@ -328,7 +331,6 @@ class RadarService : Service(), TextToSpeech.OnInitListener {
                         val lastKnown = lastKnownDeathTimes[targetName]
 
                         if (!isFirstRun && lastKnown != null && lastKnown != deathTime) {
-                            // Alarma hablada exacta requerida por el usuario
                             val deathMsg = if (targetType == "amigo") {
                                 "¡Cuidado! Tu amigo $charDisplay acaba de morir a nivel $deathLvl por $killerName."
                             } else {

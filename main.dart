@@ -252,7 +252,7 @@ class _MainDrawerScreenState extends State<MainDrawerScreen> {
 }
 
 // -------------------------------------------------------------
-// PANTALLA PRINCIPAL: HOME (INICIA CON LISTA LIMPIA)
+// PANTALLA PRINCIPAL: HOME
 // -------------------------------------------------------------
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -264,7 +264,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   static const platform = MethodChannel('com.tactical.tibia/radar');
 
-  // LISTA LIMPIA DESDE CERO (SIN PERSONAJES PRECARGADOS)
   List<TrackTarget> targets = [];
 
   final TextEditingController _nameController = TextEditingController();
@@ -279,10 +278,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Map<String, bool> muteLoginMap = {};
   Map<String, bool> muteLogoutMap = {};
+  Map<String, bool> muteDeathMap = {};
   Map<String, String> characterNotes = {};
 
   String boostedCreatureName = "Rustheap Golem";
+  String boostedCreatureImg = "https://static.tibia.com/images/global/content/creatures/rustheapgolem.gif";
   String boostedBossName = "The Diamond Blossom";
+  String boostedBossImg = "https://static.tibia.com/images/global/content/bosses/thediamondblossom.gif";
+
+  Duration timeToSS = Duration.zero;
 
   bool isScanning = false;
   bool isAddingPlayer = false;
@@ -293,9 +297,26 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     initRadar();
+    calculateTimeToSS();
     _clockUpdater = Timer.periodic(const Duration(seconds: 1), (_) {
+      calculateTimeToSS();
       if (mounted) setState(() {});
     });
+  }
+
+  void calculateTimeToSS() {
+    final nowUtc = DateTime.now().toUtc();
+    var nextSS = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day, 8, 0, 0);
+    if (nowUtc.isAfter(nextSS)) {
+      nextSS = nextSS.add(const Duration(days: 1));
+    }
+    final diff = nextSS.difference(nowUtc);
+
+    if (diff.inMinutes == 1439 && diff.inSeconds >= 55) {
+      fetchBoostedData();
+    }
+
+    timeToSS = diff;
   }
 
   Future<void> initRadar() async {
@@ -312,6 +333,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final key = t.name.toLowerCase();
       muteLoginMap[key] = prefs.getBool('mute_login_$key') ?? false;
       muteLogoutMap[key] = prefs.getBool('mute_logout_$key') ?? false;
+      muteDeathMap[key] = prefs.getBool('mute_death_$key') ?? false;
       characterNotes[key] = prefs.getString('note_$key') ?? '';
 
       final savedLogout = prefs.getInt('logout_ts_$key');
@@ -350,6 +372,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (b != null && mounted) {
           setState(() {
             boostedCreatureName = b['name'] ?? 'Rustheap Golem';
+            boostedCreatureImg = b['image_url'] ?? 'https://static.tibia.com/images/global/content/creatures/rustheapgolem.gif';
           });
         }
       }
@@ -362,6 +385,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (b != null && mounted) {
           setState(() {
             boostedBossName = b['name'] ?? 'The Diamond Blossom';
+            boostedBossImg = b['image_url'] ?? 'https://static.tibia.com/images/global/content/bosses/thediamondblossom.gif';
           });
         }
       }
@@ -505,7 +529,89 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // DETECCIÓN AUTOMÁTICA UNIVERSAL DE SERVIDOR
+  // DIÁLOGO DE NOTIFICACIONES INDIVIDUALES POR PERSONAJE (IGUAL AL VIDEO DE TIBIA LIVE)
+  void showIndividualNotificationsDialog(TrackTarget target) async {
+    final key = target.name.toLowerCase();
+    final prefs = await SharedPreferences.getInstance();
+
+    bool notifLogin = !(prefs.getBool('mute_login_$key') ?? false);
+    bool notifLogout = !(prefs.getBool('mute_logout_$key') ?? false);
+    bool notifDeath = !(prefs.getBool('mute_death_$key') ?? false);
+    bool notifLevel = true;
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF161A22),
+          title: Text(
+            "Notificaciones para ${target.name}",
+            style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SwitchListTile(
+                title: const Text("Notificaciones de login", style: TextStyle(fontSize: 13)),
+                value: notifLogin,
+                activeColor: const Color(0xFF00FFB2),
+                onChanged: (val) => setDialogState(() => notifLogin = val),
+              ),
+              SwitchListTile(
+                title: const Text("Notificaciones de logout", style: TextStyle(fontSize: 13)),
+                value: notifLogout,
+                activeColor: const Color(0xFF00FFB2),
+                onChanged: (val) => setDialogState(() => notifLogout = val),
+              ),
+              SwitchListTile(
+                title: const Text("Notificaciones de muerte", style: TextStyle(fontSize: 13)),
+                value: notifDeath,
+                activeColor: const Color(0xFF00FFB2),
+                onChanged: (val) => setDialogState(() => notifDeath = val),
+              ),
+              SwitchListTile(
+                title: const Text("Notificaciones de subida de nivel", style: TextStyle(fontSize: 13)),
+                value: notifLevel,
+                activeColor: const Color(0xFF00FFB2),
+                onChanged: (val) => setDialogState(() => notifLevel = val),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              child: const Text("CANCELAR", style: TextStyle(color: Colors.grey)),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FFB2), foregroundColor: Colors.black),
+              onPressed: () async {
+                await prefs.setBool('mute_login_$key', !notifLogin);
+                await prefs.setBool('mute_logout_$key', !notifLogout);
+                await prefs.setBool('mute_death_$key', !notifDeath);
+
+                setState(() {
+                  muteLoginMap[key] = !notifLogin;
+                  muteLogoutMap[key] = !notifLogout;
+                  muteDeathMap[key] = !notifDeath;
+                });
+
+                await syncNativeService();
+                Navigator.pop(ctx);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("Ajustes guardados para ${target.name}")),
+                );
+              },
+              child: const Text("ACEPTAR"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> addTargetAuto(String type) async {
     final text = _nameController.text.trim();
     if (text.isEmpty) return;
@@ -583,7 +689,6 @@ class _HomeScreenState extends State<HomeScreen> {
     syncNativeService();
   }
 
-  // ROPA TRICOLOR (AMARILLO, AZUL Y ROJO ÚNICAMENTE EN LA VESTIMENTA)
   Widget _getVocationWalkingSprite(String? vocation, bool isOnline) {
     final voc = (vocation ?? '').toLowerCase();
     int looktype = 128;
@@ -598,8 +703,7 @@ class _HomeScreenState extends State<HomeScreen> {
       looktype = 144;
     }
 
-    // head=0 (piel/pelo natural), body=86 (Azul), legs=94 (Rojo), feet=79 (Detalles amarillo tricolor)
-    final animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=$looktype&addons=3&head=0&body=86&legs=94&feet=79&direction=3";
+    final animUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=$looktype&addons=3&head=0&body=79&legs=86&feet=94&direction=3";
 
     return Opacity(
       opacity: isOnline ? 1.0 : 0.45,
@@ -614,34 +718,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // BOSSES Y MONSTRUOS ANIMADOS EN VIVO
-  Widget _buildLiveAnimatedCreature(String creatureName) {
-    final clean = creatureName
-        .replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '')
-        .trim()
-        .replaceAll(' ', '_');
-
-    final gifUrl = "https://www.tibiawiki.com.br/Special:FilePath/$clean.gif";
-
-    return Image.network(
-      gifUrl,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.none,
-      headers: const {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36',
-      },
-      errorBuilder: (_, __, ___) => Image.network(
-        "https://www.tibiawiki.com.br/Special:FilePath/Demon.gif",
-        fit: BoxFit.contain,
-        headers: const {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36',
-        },
-        errorBuilder: (_, __, ___) => const Icon(Icons.pest_control, color: Colors.white30, size: 32),
-      ),
-    );
-  }
-
-  // RASHID OFICIAL Y SUS MINIMAPAS
   Map<String, String> getRashidData() {
     final now = DateTime.now();
     switch (now.weekday) {
@@ -661,7 +737,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final displayList = filteredTargets;
     final rData = getRashidData();
 
-    // RASHID ORIGINAL AUTÉNTICO CAMINANDO EN DIAGONAL
     const rashidOriginalWalkingUrl = "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=146&addons=0&head=78&body=106&legs=58&feet=76&direction=3";
 
     return ListView(
@@ -786,7 +861,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // Lista de Personajes (Muestra aviso si está vacía)
+        // Lista de Personajes (Con soporte para configurar notificaciones con long-press)
         if (displayList.isEmpty)
           Container(
             margin: const EdgeInsets.all(14),
@@ -821,6 +896,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               child: ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                onLongPress: () => showIndividualNotificationsDialog(target),
                 onTap: () {
                   Navigator.push(
                     context,
@@ -830,6 +906,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         fullData: full,
                         isOnline: isOnline,
                         onlineData: onlinePlayersData[key],
+                        onNotificationConfigure: () => showIndividualNotificationsDialog(target),
                       ),
                     ),
                   );
@@ -851,9 +928,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   "Nivel $level – $vocation",
                   style: const TextStyle(color: Colors.white54, fontSize: 12),
                 ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white24, size: 16),
-                  onPressed: () => removeTarget(target.name),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.notifications_none, color: Colors.white54, size: 20),
+                      onPressed: () => showIndividualNotificationsDialog(target),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white24, size: 16),
+                      onPressed: () => removeTarget(target.name),
+                    ),
+                  ],
                 ),
               ),
             );
@@ -861,7 +947,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         const SizedBox(height: 12),
 
-        // Boosted Creature & Boss animados
+        // Boosted Creature & Boss
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
@@ -876,7 +962,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 6),
                       SizedBox(
                         height: 52,
-                        child: _buildLiveAnimatedCreature(boostedCreatureName),
+                        child: Image.network(
+                          boostedCreatureImg,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.none,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.pest_control, color: Colors.white30, size: 32),
+                        ),
                       ),
                       const SizedBox(height: 6),
                       Text(boostedCreatureName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
@@ -895,7 +986,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 6),
                       SizedBox(
                         height: 52,
-                        child: _buildLiveAnimatedCreature(boostedBossName),
+                        child: Image.network(
+                          boostedBossImg,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.none,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.shield, color: Colors.white30, size: 32),
+                        ),
                       ),
                       const SizedBox(height: 6),
                       Text(boostedBossName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
@@ -909,9 +1005,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         const SizedBox(height: 14),
 
-        // -------------------------------------------------------------
-        // TARJETA DE RASHID PEQUEÑA, COMPACTA Y SIN LÍNEA BLANCA
-        // -------------------------------------------------------------
+        // Tarjeta de Rashid Compacta
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
@@ -933,7 +1027,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Stack(
                   children: [
                     Positioned.fill(child: Container(color: const Color(0xFF264C8A))),
-                    // Minimapa de la ciudad
                     Positioned(
                       left: 0,
                       top: 0,
@@ -952,7 +1045,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
-                    // Rashid Original Caminando
                     Positioned(
                       right: 25,
                       top: 12,
@@ -968,7 +1060,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              // Barra con el texto 100% visible sin cortes
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
@@ -1006,13 +1097,14 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // -------------------------------------------------------------
-// PANTALLA DETALLE COMPLETO
+// PANTALLA DETALLE COMPLETO (CAMPANITA EN APPBAR RESTAURADA)
 // -------------------------------------------------------------
 class CharacterDetailScreen extends StatefulWidget {
   final TrackTarget target;
   final Map<String, dynamic> fullData;
   final bool isOnline;
   final dynamic onlineData;
+  final VoidCallback onNotificationConfigure;
 
   const CharacterDetailScreen({
     super.key,
@@ -1020,6 +1112,7 @@ class CharacterDetailScreen extends StatefulWidget {
     required this.fullData,
     required this.isOnline,
     this.onlineData,
+    required this.onNotificationConfigure,
   });
 
   @override
@@ -1071,31 +1164,25 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
     );
   }
 
-  Widget _buildDeathMonsterAnimated(String killerName) {
-    final clean = killerName
+  Widget _buildDeathMonsterImage(String killerName) {
+    final cleanName = killerName
         .replaceAll(RegExp(r'^(a |an )', caseSensitive: false), '')
-        .trim()
-        .replaceAll(' ', '_');
+        .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')
+        .toLowerCase();
 
-    final gifUrl = "https://www.tibiawiki.com.br/Special:FilePath/$clean.gif";
+    final officialUrl = "https://static.tibia.com/images/global/content/creatures/$cleanName.gif";
 
     return Image.network(
-      gifUrl,
+      officialUrl,
       width: 48,
       height: 48,
       fit: BoxFit.contain,
       filterQuality: FilterQuality.none,
-      headers: const {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36',
-      },
       errorBuilder: (_, __, ___) => Image.network(
-        "https://www.tibiawiki.com.br/Special:FilePath/Demon.gif",
+        "https://static.tibia.com/images/global/content/creatures/demon.gif",
         width: 44,
         height: 44,
         fit: BoxFit.contain,
-        headers: const {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/119.0.0.0 Safari/537.36',
-        },
         errorBuilder: (_, __, ___) => const Icon(Icons.dangerous, color: Colors.redAccent, size: 28),
       ),
     );
@@ -1115,6 +1202,11 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
       appBar: AppBar(
         title: const Text("Información del personaje", style: TextStyle(fontSize: 15)),
         actions: [
+          // BOTÓN DE CAMPANITA IDÉNTICO A TIBIA LIVE (MINUTO 00:20)
+          IconButton(
+            icon: const Icon(Icons.notifications),
+            onPressed: widget.onNotificationConfigure,
+          ),
           IconButton(icon: const Icon(Icons.edit_note), onPressed: editNoteDialog),
           IconButton(
             icon: const Icon(Icons.share),
@@ -1134,7 +1226,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
             child: Row(
               children: [
                 Image.network(
-                  "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=131&addons=3&head=0&body=86&legs=94&feet=79&direction=3",
+                  "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=131&addons=3&head=0&body=79&legs=86&feet=94&direction=3",
                   width: 50,
                   height: 50,
                   fit: BoxFit.contain,
@@ -1157,7 +1249,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
           ),
           const SizedBox(height: 10),
 
-          // Minimapa de residencia
+          // Minimapa real de residencia
           Container(
             height: 150,
             width: double.infinity,
@@ -1270,7 +1362,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                                 SizedBox(
                                   width: 48,
                                   height: 48,
-                                  child: _buildDeathMonsterAnimated(firstKillerName),
+                                  child: _buildDeathMonsterImage(firstKillerName),
                                 ),
                             ],
                           ),
@@ -1285,7 +1377,7 @@ class _CharacterDetailScreenState extends State<CharacterDetailScreen> {
                                   child: Column(
                                     children: [
                                       Image.network(
-                                        "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=131&addons=3&head=0&body=86&legs=94&feet=79&direction=3",
+                                        "https://outfit-images.ots.me/1285_walk_animation/animoutfit.php?id=131&addons=3&head=0&body=79&legs=86&feet=94&direction=3",
                                         width: 42,
                                         height: 42,
                                         fit: BoxFit.contain,
